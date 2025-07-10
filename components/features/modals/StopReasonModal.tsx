@@ -5,6 +5,8 @@ import { useClock } from '../../../hooks/useClock';
 import { useAuth } from '../../../contexts/AuthContext';
 import Card from '../../ui/Card';
 import { DowntimeReasonCategory } from '../../../types';
+import ProductionLineModal from './ProductionLineModal';
+import ShiftModal from './ShiftModal';
 
 // Componente para o gauge circular OEE
 const CircularGauge: React.FC<{ 
@@ -65,12 +67,14 @@ const CircularGauge: React.FC<{
 };
 
 const StopReasonModal: React.FC = () => {
-  const { liveMetrics, currentJob, downtimeReasons, registerStopReason } = useProductionStore();
+  const { liveMetrics, currentJob, downtimeReasons, registerStopReason, currentProductionLine, currentShift } = useProductionStore();
   const [selectedReason, setSelectedReason] = useState<string>('');
   const [showReasonModal, setShowReasonModal] = useState(false);
   const [activeCategory, setActiveCategory] = useState<string>(downtimeReasons[0]?.category || '');
   const [searchTerm, setSearchTerm] = useState('');
   const [customReason, setCustomReason] = useState<string>('');
+  const [showProductionLineModal, setShowProductionLineModal] = useState(false);
+  const [showShiftModal, setShowShiftModal] = useState(false);
   const currentTime = useClock();
   const { user } = useAuth();
 
@@ -132,7 +136,12 @@ const StopReasonModal: React.FC = () => {
               className="h-6 w-auto"
             />
           </div>
-          <h1 className="text-2xl font-bold text-white ml-4">ENVASE 520741-8</h1>
+          <button
+            onClick={() => setShowProductionLineModal(true)}
+            className="text-2xl font-bold text-white ml-4 hover:text-gray-200 transition-colors cursor-pointer"
+          >
+            {currentProductionLine?.name || 'ENVASE 520741-8'}
+          </button>
         </div>
         
         {/* PARADA: INFORME O MOTIVO (Centro) */}
@@ -142,7 +151,12 @@ const StopReasonModal: React.FC = () => {
         
         {/* TURNO 2 e Ícones (Lado Direito) */}
         <div className="flex items-center gap-4">
-          <h3 className="text-2xl font-bold text-white mr-4">TURNO 2</h3>
+          <button
+            onClick={() => setShowShiftModal(true)}
+            className="text-2xl font-bold text-white mr-4 hover:text-gray-200 transition-colors cursor-pointer"
+          >
+            {currentShift?.name || 'TURNO 2'}
+          </button>
           <div className="flex items-center gap-2">
             <div className="bg-white p-2 rounded-full">
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-800">
@@ -451,6 +465,14 @@ const StopReasonModal: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modais de Linha de Produção e Turno */}
+      {showProductionLineModal && (
+        <ProductionLineModal onClose={() => setShowProductionLineModal(false)} />
+      )}
+      {showShiftModal && (
+        <ShiftModal onClose={() => setShowShiftModal(false)} />
       )}
     </div>
   );

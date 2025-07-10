@@ -6,6 +6,8 @@ import MachineControls from './MachineControls';
 import Sidebar from './Sidebar';
 import StopReasonModal from '../modals/StopReasonModal';
 import SetupModal from '../modals/SetupModal';
+import ProductionLineModal from '../modals/ProductionLineModal';
+import ShiftModal from '../modals/ShiftModal';
 import { useProductionStore } from '../../../store/useProductionStore';
 import { ViewState } from '../../../types';
 import { useLiveDataPolling } from '../../../hooks/useLiveDataPolling';
@@ -344,7 +346,7 @@ const OeeView: React.FC = () => {
 };
 
 const OeeScreen: React.FC = () => {
-  const { view } = useProductionStore();
+  const { view, setView } = useProductionStore();
   
   useLiveDataPolling(3000);
 
@@ -356,6 +358,10 @@ const OeeScreen: React.FC = () => {
         return <StopReasonModal />;
       case ViewState.SETUP:
         return <SetupModal />;
+      case ViewState.PRODUCTION_LINE_MODAL:
+        return <ProductionLineModal onClose={() => setView(ViewState.OEE)} />;
+      case ViewState.SHIFT_MODAL:
+        return <ShiftModal onClose={() => setView(ViewState.OEE)} />;
       default:
         return <OeeView />;
     }

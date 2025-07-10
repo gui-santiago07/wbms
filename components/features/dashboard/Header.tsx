@@ -1,11 +1,17 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useClock } from '../../../hooks/useClock';
 import { useAuth } from '../../../contexts/AuthContext';
+import { useProductionStore } from '../../../store/useProductionStore';
+import ProductionLineModal from '../modals/ProductionLineModal';
+import ShiftModal from '../modals/ShiftModal';
 
 const Header: React.FC = () => {
   const currentTime = useClock();
   const { user, logout } = useAuth();
+  const { currentProductionLine, currentShift } = useProductionStore();
+  const [showProductionLineModal, setShowProductionLineModal] = useState(false);
+  const [showShiftModal, setShowShiftModal] = useState(false);
 
   const handleLogout = () => {
     if (window.confirm('Tem certeza que deseja sair do sistema?')) {
@@ -24,13 +30,23 @@ const Header: React.FC = () => {
           />
         </div>
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-white tracking-tight">ENVASE 520741-8</h1>
+          <button
+            onClick={() => setShowProductionLineModal(true)}
+            className="text-2xl md:text-3xl font-bold text-white tracking-tight hover:text-primary transition-colors cursor-pointer"
+          >
+            {currentProductionLine?.name || 'ENVASE 520741-8'}
+          </button>
           <p className="text-sm text-muted">Production Monitoring Dashboard</p>
         </div>
       </div>
       <div className="flex items-center gap-6">
         <div className="text-center">
-            <h2 className="text-xl font-semibold text-white">TURNO 2</h2>
+          <button
+            onClick={() => setShowShiftModal(true)}
+            className="text-xl font-semibold text-white hover:text-primary transition-colors cursor-pointer"
+          >
+            {currentShift?.name || 'TURNO 2'}
+          </button>
         </div>
         <div className="text-right">
           <p className="font-semibold text-lg text-white">
@@ -81,6 +97,14 @@ const Header: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Modais */}
+      {showProductionLineModal && (
+        <ProductionLineModal onClose={() => setShowProductionLineModal(false)} />
+      )}
+      {showShiftModal && (
+        <ShiftModal onClose={() => setShowShiftModal(false)} />
+      )}
     </header>
   );
 };

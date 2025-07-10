@@ -15,6 +15,8 @@ export enum ViewState {
   SETUP = 'SETUP',
   HELP = 'HELP',
   OEE = 'OEE',
+  PRODUCTION_LINE_MODAL = 'PRODUCTION_LINE_MODAL',
+  SHIFT_MODAL = 'SHIFT_MODAL',
 }
 
 export interface LiveMetrics {
@@ -80,4 +82,20 @@ export interface CardProps {
   children: ReactNode;
   className?: string;
   onClick?: () => void;
+}
+
+export interface ProductionLine {
+  id: string;
+  name: string;
+  code: string;
+  description: string;
+  isActive: boolean;
+}
+
+export interface Shift {
+  id: string;
+  name: string;
+  startTime: string;
+  endTime: string;
+  isActive: boolean;
 }

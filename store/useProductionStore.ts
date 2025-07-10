@@ -1,6 +1,6 @@
 
 import { create } from 'zustand';
-import { MachineStatus, ViewState, LiveMetrics, CurrentJob, DowntimeEvent, DowntimeReasonCategory, ProductionOrder, Product } from '../types';
+import { MachineStatus, ViewState, LiveMetrics, CurrentJob, DowntimeEvent, DowntimeReasonCategory, ProductionOrder, Product, ProductionLine, Shift } from '../types';
 
 interface ProductionState {
   machineStatus: MachineStatus;
@@ -13,6 +13,10 @@ interface ProductionState {
   productionOrders: ProductionOrder[];
   products: Product[];
   currentDowntimeEventId: string | null;
+  productionLines: ProductionLine[];
+  shifts: Shift[];
+  currentProductionLine: ProductionLine | null;
+  currentShift: Shift | null;
   
   setMachineStatus: (status: MachineStatus) => void;
   setView: (view: ViewState) => void;
@@ -21,6 +25,10 @@ interface ProductionState {
   selectProductionOrder: (order: ProductionOrder) => void;
   startSetup: () => void;
   startProduction: () => void;
+  setCurrentProductionLine: (line: ProductionLine) => void;
+  setCurrentShift: (shift: Shift) => void;
+  createProductionLine: (line: Omit<ProductionLine, 'id'>) => void;
+  createShift: (shift: Omit<Shift, 'id'>) => void;
 }
 
 const mockDowntimeReasons: DowntimeReasonCategory[] = [
@@ -45,6 +53,18 @@ const mockProductionOrders: ProductionOrder[] = [
 const mockProducts: Product[] = [
     { id: 'prod-a', sku: 'SKU-12345', description: 'Widget Assembly Type-A' },
     { id: 'prod-b', sku: 'SKU-67890', description: 'Widget Assembly Type-B' },
+];
+
+const mockProductionLines: ProductionLine[] = [
+    { id: 'line-1', name: 'ENVASE 520741-8', code: '520741-8', description: 'Linha de Envase Principal', isActive: true },
+    { id: 'line-2', name: 'ENVASE 520741-9', code: '520741-9', description: 'Linha de Envase Secundária', isActive: true },
+    { id: 'line-3', name: 'EMBALAGEM 520741-10', code: '520741-10', description: 'Linha de Embalagem', isActive: false },
+];
+
+const mockShifts: Shift[] = [
+    { id: 'shift-1', name: 'TURNO 1', startTime: '06:00', endTime: '14:00', isActive: false },
+    { id: 'shift-2', name: 'TURNO 2', startTime: '14:00', endTime: '22:00', isActive: true },
+    { id: 'shift-3', name: 'TURNO 3', startTime: '22:00', endTime: '06:00', isActive: false },
 ];
 
 
@@ -78,6 +98,10 @@ export const useProductionStore = create<ProductionState>((set, get) => ({
   productionOrders: mockProductionOrders,
   products: mockProducts,
   currentDowntimeEventId: null,
+  productionLines: mockProductionLines,
+  shifts: mockShifts,
+  currentProductionLine: mockProductionLines[0], // ENVASE 520741-8
+  currentShift: mockShifts[1], // TURNO 2
 
   setMachineStatus: (status: MachineStatus) => {
     set({ machineStatus: status });
@@ -167,5 +191,123 @@ export const useProductionStore = create<ProductionState>((set, get) => ({
         // Maybe show an alert that a job must be selected
         alert("Please select a Production Order or Product first.");
     }
+  },
+
+  setCurrentProductionLine: (line: ProductionLine) => {
+    set({ currentProductionLine: line });
+    // Simular atualização dos dados baseado na linha de produção
+    // Em um sistema real, isso dispararia uma API call
+    const lineBasedData = {
+      'line-1': { // ENVASE 520741-8
+        total: 240,
+        good: 213,
+        rejects: 3,
+        oee: 80.1,
+        currentJob: {
+          orderId: '5207418',
+          orderQuantity: 1241,
+          productId: '240042176',
+          productName: 'GUARANA 500ml',
+        }
+      },
+      'line-2': { // ENVASE 520741-9
+        total: 180,
+        good: 165,
+        rejects: 5,
+        oee: 75.3,
+        currentJob: {
+          orderId: '5207419',
+          orderQuantity: 980,
+          productId: '240042177',
+          productName: 'COCA-COLA 350ml',
+        }
+      },
+      'line-3': { // EMBALAGEM 520741-10
+        total: 320,
+        good: 295,
+        rejects: 8,
+        oee: 85.7,
+        currentJob: {
+          orderId: '5207420',
+          orderQuantity: 1500,
+          productId: '240042178',
+          productName: 'ÁGUA MINERAL 500ml',
+        }
+      }
+    };
+    
+    const data = lineBasedData[line.id as keyof typeof lineBasedData];
+    if (data) {
+      set(state => ({
+        liveMetrics: {
+          ...state.liveMetrics,
+          total: data.total,
+          good: data.good,
+          rejects: data.rejects,
+          oee: data.oee,
+          productionOrderProgress: data.good,
+        },
+        currentJob: data.currentJob
+      }));
+    }
+  },
+
+  setCurrentShift: (shift: Shift) => {
+    set({ currentShift: shift });
+    // Simular atualização dos dados baseado no turno
+    // Em um sistema real, isso dispararia uma API call
+    const shiftBasedData = {
+      'shift-1': { // TURNO 1
+        timeInShift: 6.5,
+        totalShiftTime: 8.0,
+        avgSpeed: 25.2,
+        instantSpeed: 26.8,
+      },
+      'shift-2': { // TURNO 2
+        timeInShift: 2.3,
+        totalShiftTime: 7.8,
+        avgSpeed: 27.6,
+        instantSpeed: 29.3,
+      },
+      'shift-3': { // TURNO 3
+        timeInShift: 4.1,
+        totalShiftTime: 8.0,
+        avgSpeed: 23.8,
+        instantSpeed: 24.5,
+      }
+    };
+    
+    const data = shiftBasedData[shift.id as keyof typeof shiftBasedData];
+    if (data) {
+      set(state => ({
+        liveMetrics: {
+          ...state.liveMetrics,
+          timeInShift: data.timeInShift,
+          totalShiftTime: data.totalShiftTime,
+          avgSpeed: data.avgSpeed,
+          instantSpeed: data.instantSpeed,
+        }
+      }));
+    }
+  },
+
+  createProductionLine: (lineData: Omit<ProductionLine, 'id'>) => {
+    const newLine: ProductionLine = {
+      ...lineData,
+      id: `line-${Date.now()}`,
+    };
+    set(state => ({
+      productionLines: [...state.productionLines, newLine],
+    }));
+  },
+
+  createShift: (shiftData: Omit<Shift, 'id'>) => {
+    const newShift: Shift = {
+      ...shiftData,
+      id: `shift-${Date.now()}`,
+    };
+    set(state => ({
+      shifts: [...state.shifts, newShift],
+    }));
   },
 }));

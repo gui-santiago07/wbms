@@ -12,6 +12,8 @@ import ProductionChart from '../components/features/dashboard/ProductionChart';
 import MachineControls from '../components/features/dashboard/MachineControls';
 import StopReasonModal from '../components/features/modals/StopReasonModal';
 import SetupModal from '../components/features/modals/SetupModal';
+import ProductionLineModal from '../components/features/modals/ProductionLineModal';
+import ShiftModal from '../components/features/modals/ShiftModal';
 import { useLiveDataPolling } from '../hooks/useLiveDataPolling';
 import Card from '../components/ui/Card';
 import Sidebar from '../components/features/dashboard/Sidebar';
@@ -67,7 +69,7 @@ const DashboardView: React.FC = () => {
 
 
 const DashboardPage: React.FC = () => {
-  const { view } = useProductionStore();
+  const { view, setView } = useProductionStore();
   
   useLiveDataPolling(3000);
 
@@ -79,6 +81,10 @@ const DashboardPage: React.FC = () => {
         return <StopReasonModal />;
       case ViewState.SETUP:
         return <SetupModal />;
+      case ViewState.PRODUCTION_LINE_MODAL:
+        return <ProductionLineModal onClose={() => setView(ViewState.DASHBOARD)} />;
+      case ViewState.SHIFT_MODAL:
+        return <ShiftModal onClose={() => setView(ViewState.DASHBOARD)} />;
       default:
         return <DashboardView />;
     }
