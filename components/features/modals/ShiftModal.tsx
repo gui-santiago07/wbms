@@ -12,7 +12,8 @@ const ShiftModal: React.FC<ShiftModalProps> = ({ onClose }) => {
     shifts, 
     currentShift, 
     setCurrentShift, 
-    createShift 
+    createShift,
+    loadRealShifts
   } = useProductionStore();
   
   const [isCreating, setIsCreating] = useState(false);
@@ -26,6 +27,14 @@ const ShiftModal: React.FC<ShiftModalProps> = ({ onClose }) => {
   const handleSelectShift = (shift: Shift) => {
     setCurrentShift(shift);
     onClose();
+  };
+
+  const handleRefreshShifts = async () => {
+    try {
+      await loadRealShifts();
+    } catch (error) {
+      console.error('Erro ao atualizar turnos:', error);
+    }
   };
 
   const handleCreateShift = () => {
@@ -46,15 +55,29 @@ const ShiftModal: React.FC<ShiftModalProps> = ({ onClose }) => {
         <div className="p-6">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-2xl font-bold text-white">Selecionar Turno</h2>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-white transition-colors"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="18" y1="6" x2="6" y2="18"></line>
-                <line x1="6" y1="6" x2="18" y2="18"></line>
-              </svg>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleRefreshShifts}
+                className="text-gray-400 hover:text-white transition-colors p-2"
+                title="Atualizar turnos"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+                  <path d="M21 3v5h-5"/>
+                  <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+                  <path d="M3 21v-5h5"/>
+                </svg>
+              </button>
+              <button
+                onClick={onClose}
+                className="text-gray-400 hover:text-white transition-colors"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
+            </div>
           </div>
 
           {/* Lista de Turnos */}

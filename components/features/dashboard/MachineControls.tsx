@@ -26,9 +26,12 @@ const ControlButton: React.FC<ControlButtonProps> = ({ label, icon, onClick, col
 };
 
 const MachineControls: React.FC = () => {
-  const { setMachineStatus, startSetup, setView, machineStatus } = useProductionStore();
+  const { setMachineStatus, startSetup, setView, machineStatus, registerEvent } = useProductionStore();
   const setPaused = () => setMachineStatus(MachineStatus.PAUSED);
-  const setDown = () => setMachineStatus(MachineStatus.DOWN);
+  const setDown = async () => {
+    await registerEvent('DOWN');
+    setMachineStatus(MachineStatus.DOWN);
+  };
 
   return (
     <Card className="p-6">

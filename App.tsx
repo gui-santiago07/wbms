@@ -7,6 +7,7 @@ import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import DeviceSettingsPage from './pages/DeviceSettingsPage';
 import OeeScreen from './components/features/dashboard/OeeScreen';
+import DebugPanel from './components/ui/DebugPanel';
 
 const App: React.FC = () => {
   return (
@@ -55,6 +56,9 @@ const App: React.FC = () => {
           {/* Rota de fallback */}
           <Route path="*" element={<Navigate to="/oee" replace />} />
         </Routes>
+        
+        {/* Debug Panel - sempre visível */}
+        <DebugPanel />
       </div>
     </AuthProvider>
   );

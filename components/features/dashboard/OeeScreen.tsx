@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Card from '../../ui/Card';
 import Header from './Header';
 import ProductionDetails from './ProductionDetails';
@@ -8,96 +8,15 @@ import StopReasonModal from '../modals/StopReasonModal';
 import SetupModal from '../modals/SetupModal';
 import ProductionLineModal from '../modals/ProductionLineModal';
 import ShiftModal from '../modals/ShiftModal';
+import LoadingSpinner from '../../ui/LoadingSpinner';
+import ErrorMessage from '../../ui/ErrorMessage';
 import { useProductionStore } from '../../../store/useProductionStore';
 import { ViewState } from '../../../types';
 import { useLiveDataPolling } from '../../../hooks/useLiveDataPolling';
+import { config } from '../../../config/environment';
 
 // Tipos para os filtros de tempo
 type TimePeriod = '1h' | '4h' | '8h' | '24h' | '7d';
-
-// Dados mockados para diferentes períodos
-const historicalData = {
-  '1h': {
-    points: [
-      { x: 10, y: 78 },
-      { x: 25, y: 80 },
-      { x: 40, y: 82 },
-      { x: 55, y: 79 },
-      { x: 70, y: 85 },
-      { x: 85, y: 83 },
-      { x: 100, y: 87 },
-      { x: 115, y: 84 },
-      { x: 130, y: 89 },
-      { x: 145, y: 86 },
-      { x: 160, y: 91 },
-      { x: 175, y: 88 },
-      { x: 190, y: 90 },
-    ],
-    timeLabels: ['05:00 PM', '05:20 PM', '05:40 PM'],
-    trend: '+12.0%',
-    trendColor: 'text-green-400'
-  },
-  '4h': {
-    points: [
-      { x: 10, y: 75 },
-      { x: 30, y: 78 },
-      { x: 50, y: 82 },
-      { x: 70, y: 79 },
-      { x: 90, y: 85 },
-      { x: 110, y: 83 },
-      { x: 130, y: 87 },
-      { x: 150, y: 84 },
-      { x: 170, y: 88 },
-      { x: 190, y: 90 },
-    ],
-    timeLabels: ['02:00 PM', '04:00 PM', '06:00 PM'],
-    trend: '+15.0%',
-    trendColor: 'text-green-400'
-  },
-  '8h': {
-    points: [
-      { x: 10, y: 70 },
-      { x: 35, y: 73 },
-      { x: 60, y: 76 },
-      { x: 85, y: 79 },
-      { x: 110, y: 82 },
-      { x: 135, y: 85 },
-      { x: 160, y: 87 },
-      { x: 185, y: 90 },
-    ],
-    timeLabels: ['10:00 AM', '02:00 PM', '06:00 PM'],
-    trend: '+20.0%',
-    trendColor: 'text-green-400'
-  },
-  '24h': {
-    points: [
-      { x: 10, y: 65 },
-      { x: 40, y: 68 },
-      { x: 70, y: 72 },
-      { x: 100, y: 75 },
-      { x: 130, y: 78 },
-      { x: 160, y: 82 },
-      { x: 190, y: 85 },
-    ],
-    timeLabels: ['Ontem', 'Hoje 12h', 'Agora'],
-    trend: '+20.0%',
-    trendColor: 'text-green-400'
-  },
-  '7d': {
-    points: [
-      { x: 10, y: 60 },
-      { x: 40, y: 65 },
-      { x: 70, y: 70 },
-      { x: 100, y: 75 },
-      { x: 130, y: 78 },
-      { x: 160, y: 82 },
-      { x: 190, y: 85 },
-    ],
-    timeLabels: ['7 dias', '3 dias', 'Hoje'],
-    trend: '+25.0%',
-    trendColor: 'text-green-400'
-  }
-};
 
 // Componente para os gauges circulares de OEE
 const CircularGauge: React.FC<{ 
@@ -149,7 +68,20 @@ const CircularGauge: React.FC<{
 // Componente para o gráfico de tendência OEE com filtros funcionais
 const OeeTrendChart: React.FC = () => {
   const [selectedPeriod, setSelectedPeriod] = useState<TimePeriod>('1h');
-  const currentData = historicalData[selectedPeriod];
+  const { oeeHistory, fetchOeeHistory, currentShift } = useProductionStore();
+
+  // Carregar dados históricos quando o período mudar
+  useEffect(() => {
+    fetchOeeHistory(selectedPeriod);
+  }, [selectedPeriod, fetchOeeHistory, currentShift]);
+
+  // Usar dados do store ou dados padrão se não houver dados
+  const currentData = oeeHistory || {
+    points: [{ x: 10, y: 80 }, { x: 190, y: 85 }],
+    timeLabels: ['Início', 'Agora'],
+    trend: '+5.0%',
+    trendColor: 'text-green-400'
+  };
 
   const pathData = currentData.points.map((point, index) => 
     `${index === 0 ? 'M' : 'L'} ${point.x} ${100 - point.y}`
@@ -222,9 +154,18 @@ const OeeTrendChart: React.FC = () => {
 };
 
 const OeeView: React.FC = () => {
-  const { liveMetrics, currentJob } = useProductionStore();
-  const goodPartsPercent = liveMetrics.total > 0 ? (liveMetrics.good / liveMetrics.total) * 100 : 98.6;
-  const rejectsPercent = liveMetrics.total > 0 ? (liveMetrics.rejects / liveMetrics.total) * 100 : 1.4;
+  const { liveMetrics, currentJob, currentShift } = useProductionStore();
+  const goodPartsPercent = liveMetrics.total > 0 ? (liveMetrics.good / liveMetrics.total) * 100 : 100; // Sempre 100% (sem rejeitos)
+
+  // Calcular progresso da ordem de produção
+  const productionProgress = liveMetrics.possibleProduction > 0 
+    ? (liveMetrics.productionOrderProgress / liveMetrics.possibleProduction) * 100 
+    : 90.0;
+
+  // Calcular tempo decorrido no turno
+  const timeProgress = liveMetrics.totalShiftTime > 0 
+    ? (liveMetrics.timeInShift / liveMetrics.totalShiftTime) * 100 
+    : 0;
 
   return (
     <div className="space-y-6">
@@ -243,33 +184,35 @@ const OeeView: React.FC = () => {
                 </svg>
                 Production
               </h2>
-              <div className="text-sm text-muted">01:14 PM - 05:14 PM</div>
+              <div className="text-sm text-muted">
+                {currentShift?.name || 'Turno Ativo'}
+              </div>
             </div>
             
             <div className="grid grid-cols-3 gap-4 mb-6">
               <div className="bg-surface p-4 rounded-lg">
                 <div className="text-sm text-muted mb-1">Target</div>
-                <div className="text-3xl font-bold text-white">240</div>
+                <div className="text-3xl font-bold text-white">{liveMetrics.possibleProduction}</div>
               </div>
               <div className="bg-surface p-4 rounded-lg">
                 <div className="text-sm text-muted mb-1">Actual</div>
-                <div className="text-3xl font-bold text-white">216</div>
+                <div className="text-3xl font-bold text-white">{liveMetrics.productionOrderProgress}</div>
               </div>
               <div className="bg-surface p-4 rounded-lg">
                 <div className="text-sm text-muted mb-1">Completion</div>
-                <div className="text-3xl font-bold text-white">90.0%</div>
+                <div className="text-3xl font-bold text-white">{productionProgress.toFixed(1)}%</div>
               </div>
             </div>
 
             <div className="mb-4">
               <div className="flex justify-between items-center mb-2">
                 <span className="text-sm text-muted">Progress</span>
-                <span className="text-sm text-muted">216 / 240</span>
+                <span className="text-sm text-muted">{liveMetrics.productionOrderProgress} / {liveMetrics.possibleProduction}</span>
               </div>
               <div className="w-full bg-gray-700 h-3 rounded-full overflow-hidden">
                 <div 
                   className="bg-blue-500 h-full transition-all duration-500 ease-out"
-                  style={{ width: '90%' }}
+                  style={{ width: `${Math.min(productionProgress, 100)}%` }}
                 />
               </div>
             </div>
@@ -278,12 +221,7 @@ const OeeView: React.FC = () => {
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 bg-green-500 rounded-full"></div>
                 <span className="text-sm text-white">Good Parts</span>
-                <span className="text-sm font-bold text-white">213 (98.6%)</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-                <span className="text-sm text-white">Rejects</span>
-                <span className="text-sm font-bold text-white">3 (1.4%)</span>
+                <span className="text-sm font-bold text-white">{liveMetrics.good} ({goodPartsPercent.toFixed(1)}%)</span>
               </div>
             </div>
           </Card>
@@ -291,16 +229,16 @@ const OeeView: React.FC = () => {
           {/* Métricas OEE */}
           <div className="grid grid-cols-4 gap-4">
             <Card className="p-4 text-center">
-              <CircularGauge value={80.0} label="OEE" color="#3b82f6" />
+              <CircularGauge value={liveMetrics.oee} label="OEE" color="#3b82f6" />
             </Card>
             <Card className="p-4 text-center">
-              <CircularGauge value={92.5} label="Availability" color="#22c55e" />
+              <CircularGauge value={liveMetrics.availability} label="Availability" color="#22c55e" />
             </Card>
             <Card className="p-4 text-center">
-              <CircularGauge value={87.3} label="Performance" color="#f59e0b" />
+              <CircularGauge value={liveMetrics.performance} label="Performance" color="#f59e0b" />
             </Card>
             <Card className="p-4 text-center">
-              <CircularGauge value={99.1} label="Quality" color="#8b5cf6" />
+              <CircularGauge value={liveMetrics.quality} label="Quality" color="#8b5cf6" />
             </Card>
           </div>
         </div>
@@ -310,25 +248,25 @@ const OeeView: React.FC = () => {
           <Card className="p-6">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold text-white">Production Details</h3>
-              <span className="text-sm font-semibold text-blue-400">Turno 2</span>
+              <span className="text-sm font-semibold text-blue-400">{currentShift?.name || 'Turno Ativo'}</span>
             </div>
             
             <div className="space-y-3">
               <div className="flex justify-between">
                 <span className="text-sm text-muted">Ordem de Produção</span>
-                <span className="text-sm font-semibold text-white">5207418</span>
+                <span className="text-sm font-semibold text-white">{currentJob?.orderId || 'N/A'}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-sm text-muted">Quantidade OP</span>
-                <span className="text-sm font-semibold text-white">1241</span>
+                <span className="text-sm font-semibold text-white">{currentJob?.orderQuantity || 'N/A'}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-sm text-muted">Product Code</span>
-                <span className="text-sm font-semibold text-white">24004217</span>
+                <span className="text-sm font-semibold text-white">{currentJob?.productId || 'N/A'}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-sm text-muted">Product ID</span>
-                <span className="text-sm font-semibold text-white">Guarana 500ml</span>
+                <span className="text-sm font-semibold text-white">{currentJob?.productName || 'N/A'}</span>
               </div>
             </div>
           </Card>
@@ -346,9 +284,14 @@ const OeeView: React.FC = () => {
 };
 
 const OeeScreen: React.FC = () => {
-  const { view, setView } = useProductionStore();
+  const { view, setView, initializeDashboard, isLoading, error } = useProductionStore();
   
   useLiveDataPolling(3000);
+
+  // Inicializar dados do dashboard na primeira carga
+  useEffect(() => {
+    initializeDashboard();
+  }, [initializeDashboard]);
 
   const renderView = () => {
     switch (view) {
@@ -373,6 +316,32 @@ const OeeScreen: React.FC = () => {
       <div className="bg-background min-h-screen">
         <Sidebar />
         <StopReasonModal />
+      </div>
+    );
+  }
+
+  // Mostrar loading durante inicialização
+  if (isLoading) {
+    return (
+      <div className="p-4 sm:p-6 lg:p-8 bg-background min-h-screen ml-16 flex items-center justify-center">
+        <LoadingSpinner size="lg" />
+      </div>
+    );
+  }
+
+  // Mostrar erro se houver
+  if (error) {
+    return (
+      <div className="p-4 sm:p-6 lg:p-8 bg-background min-h-screen ml-16">
+        <Header />
+        <main className="mt-6">
+          <Sidebar />
+          <ErrorMessage 
+            message={error} 
+            onRetry={initializeDashboard}
+            onDismiss={() => useProductionStore.getState().clearError()}
+          />
+        </main>
       </div>
     );
   }

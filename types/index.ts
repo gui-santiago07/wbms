@@ -98,4 +98,15 @@ export interface Shift {
   startTime: string;
   endTime: string;
   isActive: boolean;
+  // Campos adicionais para integração com API real
+  shiftNumberKey?: number;
+  assetId?: string;
+  partId?: string;
+  totalCount?: number;
+  goodCount?: number;
+  rejectCount?: number;
+  oee?: number;
+  availability?: number;
+  performance?: number;
+  quality?: number;
 }

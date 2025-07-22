@@ -6,16 +6,16 @@ export const useLiveDataPolling = (intervalMs: number) => {
   const fetchLiveData = useProductionStore((state) => state.fetchLiveData);
   const machineStatus = useProductionStore((state) => state.machineStatus);
 
-
   useEffect(() => {
-    // Only poll when the machine is running
-    if (machineStatus === 'RUNNING') {
-        const intervalId = setInterval(() => {
-            fetchLiveData();
-        }, intervalMs);
+    // Polling sempre ativo para receber atualizações da API
+    const intervalId = setInterval(async () => {
+      try {
+        await fetchLiveData();
+      } catch (error) {
+        console.error('Erro no polling:', error);
+      }
+    }, intervalMs);
 
-        return () => clearInterval(intervalId);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fetchLiveData, intervalMs, machineStatus]);
+    return () => clearInterval(intervalId);
+  }, [fetchLiveData, intervalMs]);
 };

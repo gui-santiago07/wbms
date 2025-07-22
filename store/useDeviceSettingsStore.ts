@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { Device, DeviceFormData, DeviceSettingsState, DeviceSettingsActions, ProductionLine } from '../types/device';
+import ApiClient from '../services/api';
 
 // Mock de dados para desenvolvimento
 const mockDevices: Device[] = [

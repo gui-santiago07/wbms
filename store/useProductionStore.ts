@@ -1,6 +1,9 @@
 
 import { create } from 'zustand';
 import { MachineStatus, ViewState, LiveMetrics, CurrentJob, DowntimeEvent, DowntimeReasonCategory, ProductionOrder, Product, ProductionLine, Shift } from '../types';
+import DashboardService from '../services/dashboardService';
+import ShiftService from '../services/shiftService';
+import WbmsService from '../services/wbmsService';
 
 interface ProductionState {
   machineStatus: MachineStatus;
@@ -17,11 +20,25 @@ interface ProductionState {
   shifts: Shift[];
   currentProductionLine: ProductionLine | null;
   currentShift: Shift | null;
+  isLoading: boolean;
+  error: string | null;
+  dashboardService: DashboardService;
+  shiftService: ShiftService;
+  wbmsService: WbmsService;
+  oeeHistory: {
+    points: Array<{ x: number; y: number }>;
+    timeLabels: string[];
+    trend: string;
+    trendColor: string;
+  } | null;
   
   setMachineStatus: (status: MachineStatus) => void;
   setView: (view: ViewState) => void;
-  fetchLiveData: () => void; // Will be used by polling hook
-  registerStopReason: (reason: string) => void;
+  fetchLiveData: () => Promise<void>;
+  initializeDashboard: () => Promise<void>;
+  fetchOeeHistory: (period: string) => Promise<void>;
+  registerStopReason: (reason: string) => Promise<void>;
+  registerEvent: (eventType: 'DOWN' | 'SETUP' | 'PAUSE' | 'RUN' | 'ASSISTANCE_REQUEST') => Promise<void>;
   selectProductionOrder: (order: ProductionOrder) => void;
   startSetup: () => void;
   startProduction: () => void;
@@ -29,6 +46,8 @@ interface ProductionState {
   setCurrentShift: (shift: Shift) => void;
   createProductionLine: (line: Omit<ProductionLine, 'id'>) => void;
   createShift: (shift: Omit<Shift, 'id'>) => void;
+  loadRealShifts: () => Promise<boolean>;
+  clearError: () => void;
 }
 
 const mockDowntimeReasons: DowntimeReasonCategory[] = [
@@ -73,26 +92,21 @@ export const useProductionStore = create<ProductionState>((set, get) => ({
   view: ViewState.DASHBOARD,
   previousView: null,
   liveMetrics: {
-    total: 240,
-    good: 213,
-    rejects: 3,
-    oee: 80.1,
-    availability: 93.4,
-    performance: 87.7,
-    quality: 98.6,
-    productionOrderProgress: 213,
-    possibleProduction: 275,
-    timeInShift: 2.3,
-    totalShiftTime: 7.8,
-    avgSpeed: 27.6,
-    instantSpeed: 29.3,
+    total: 0,
+    good: 0,
+    rejects: 0, // Zerar rejeitos
+    oee: 0,
+    availability: 0,
+    performance: 0,
+    quality: 100, // Qualidade sempre 100% (sem rejeitos)
+    productionOrderProgress: 0,
+    possibleProduction: 0,
+    timeInShift: 0,
+    totalShiftTime: 0,
+    avgSpeed: 0,
+    instantSpeed: 0,
   },
-  currentJob: {
-    orderId: '5207418',
-    orderQuantity: 1241,
-    productId: '240042176',
-    productName: 'GUARANA 500ml',
-  },
+  currentJob: null,
   downtimeHistory: mockDowntimeHistory,
   downtimeReasons: mockDowntimeReasons,
   productionOrders: mockProductionOrders,
@@ -100,10 +114,16 @@ export const useProductionStore = create<ProductionState>((set, get) => ({
   currentDowntimeEventId: null,
   productionLines: mockProductionLines,
   shifts: mockShifts,
-  currentProductionLine: mockProductionLines[0], // ENVASE 520741-8
-  currentShift: mockShifts[1], // TURNO 2
+  currentProductionLine: mockProductionLines[0], // ENVASE 520741-8 como padrão
+  currentShift: mockShifts[1], // TURNO 2 como padrão (ativo)
+  isLoading: false,
+  error: null,
+  dashboardService: new DashboardService(),
+  shiftService: new ShiftService(),
+  wbmsService: new WbmsService(),
+  oeeHistory: null,
 
-  setMachineStatus: (status: MachineStatus) => {
+    setMachineStatus: (status: MachineStatus) => {
     set({ machineStatus: status });
     if (status === MachineStatus.DOWN) {
         const currentView = get().view;
@@ -131,41 +151,172 @@ export const useProductionStore = create<ProductionState>((set, get) => ({
   
   setView: (view: ViewState) => set({ view }),
 
-  fetchLiveData: () => {
-    // This is a mock. In a real app, it would fetch from an API.
-    // For now, let's just slightly update some metrics to show it's "live"
-    set(state => {
-      if (state.machineStatus === MachineStatus.RUNNING) {
-        const newGood = state.liveMetrics.good + 1;
-        const newTotal = state.liveMetrics.total + 1;
-        return {
-          liveMetrics: {
-            ...state.liveMetrics,
-            good: newGood,
-            total: newTotal,
-            productionOrderProgress: newGood,
-            instantSpeed: 28 + Math.random() * 3, // Fluctuate speed
-            oee: 79 + Math.random() * 2,
-          }
-        };
+  initializeDashboard: async () => {
+    const { wbmsService } = get();
+    console.log('🏪 Store: Iniciando dashboard...');
+    set({ isLoading: true, error: null });
+    
+    try {
+      // Primeiro, carregar turnos
+      console.log('🏪 Store: Carregando turnos...');
+      await get().loadRealShifts();
+      
+      // Obter o turno atual
+      const { currentShift, currentProductionLine } = get();
+      console.log('🏪 Store: Turno atual:', currentShift?.name);
+      console.log('🏪 Store: Linha atual:', currentProductionLine?.name);
+      
+      // Se temos turno, carregar dados em tempo real
+      if (currentShift) {
+        console.log('🏪 Store: Carregando dados WBMS em tempo real...');
+        
+        // Usar equipamento padrão do WBMS
+        const equipmentId = await wbmsService.getDefaultEquipment();
+        
+        const liveData = await wbmsService.getLiveData(equipmentId);
+        const liveMetrics = wbmsService.convertToLiveMetrics(liveData);
+        const currentJob = wbmsService.convertToCurrentJob(liveData);
+        const productionLine = wbmsService.convertToProductionLine(liveData);
+        
+        console.log('🏪 Store: Dados WBMS recebidos, atualizando estado...', { liveData, liveMetrics });
+        
+        set({
+          liveMetrics,
+          currentJob: currentJob || get().currentJob, // Manter job atual se não há novo
+          currentProductionLine: productionLine || currentProductionLine, // Manter linha atual se não há nova
+          isLoading: false,
+        });
+      } else {
+        console.log('🏪 Store: Usando dados mockados (turno não definido)');
+        set({ isLoading: false });
       }
-      return {};
-    });
+      
+      console.log('🏪 Store: Dashboard inicializado com sucesso!');
+    } catch (error) {
+      console.error('🏪 Store: Erro ao inicializar dashboard:', error);
+      set({ 
+        error: error instanceof Error ? error.message : 'Erro desconhecido',
+        isLoading: false 
+      });
+    }
   },
 
-  registerStopReason: (reason: string) => {
-    set(state => {
-      const previousView = state.previousView || ViewState.DASHBOARD;
-      return {
-        downtimeHistory: state.downtimeHistory.map(event => 
-          event.id === state.currentDowntimeEventId ? { ...event, reason } : event
-        ),
-        currentDowntimeEventId: null,
-        machineStatus: MachineStatus.RUNNING,
-        view: previousView,
-        previousView: null,
-      };
+  fetchLiveData: async () => {
+    const { wbmsService, currentShift } = get();
+    console.log('🔄 Store: Buscando dados em tempo real WBMS...', { 
+      currentShift: currentShift?.name
     });
+    
+    // Só fazer chamadas se há um turno atual
+    if (!currentShift) {
+      console.log('🔄 Store: Turno não definido, pulando busca de dados');
+      return;
+    }
+    
+    try {
+      // Usar equipamento padrão do WBMS
+      const equipmentId = await wbmsService.getDefaultEquipment();
+      
+      const liveData = await wbmsService.getLiveData(equipmentId);
+      const liveMetrics = wbmsService.convertToLiveMetrics(liveData);
+      const machineStatus = wbmsService.getMachineStatus(liveData);
+      
+      console.log('🔄 Store: Dados em tempo real recebidos:', { liveData, liveMetrics, machineStatus });
+      
+      // Só atualizar o status da máquina se não há um evento de parada em andamento
+      const currentState = get();
+      const shouldUpdateMachineStatus = !currentState.currentDowntimeEventId || machineStatus !== 'DOWN';
+      
+      console.log('🔄 Store: Verificando atualização de status:', {
+        currentMachineStatus: currentState.machineStatus,
+        newMachineStatus: machineStatus,
+        hasDowntimeEvent: !!currentState.currentDowntimeEventId,
+        shouldUpdate: shouldUpdateMachineStatus
+      });
+      
+      set({ 
+        liveMetrics,
+        machineStatus: shouldUpdateMachineStatus ? (machineStatus as MachineStatus) : currentState.machineStatus,
+        error: null
+      });
+
+      // Se a máquina parou E não estamos já na tela de parada E não há um evento de parada em andamento
+      if (machineStatus === 'DOWN' && get().view !== ViewState.STOP_REASON && !get().currentDowntimeEventId) {
+        console.log('🔄 Store: Máquina parou, mostrando modal de motivo...');
+        const currentView = get().view;
+        const newEventId = `evt${Date.now()}`;
+        set({ 
+          previousView: currentView,
+          view: ViewState.STOP_REASON, 
+          currentDowntimeEventId: newEventId,
+          downtimeHistory: [
+            { id: newEventId, operator: 'John Smith', startDate: new Date().toISOString().split('T')[0], startTime: new Date().toLocaleTimeString(), endDate: null, endTime: null, totalTime: null, reason: 'Aguardando motivo...' },
+            ...get().downtimeHistory
+          ]
+        });
+      }
+    } catch (error) {
+      console.error('🔄 Store: Erro ao buscar dados em tempo real:', error);
+      set({ error: error instanceof Error ? error.message : 'Erro ao buscar dados' });
+    }
+  },
+
+  registerEvent: async (eventType: 'DOWN' | 'SETUP' | 'PAUSE' | 'RUN' | 'ASSISTANCE_REQUEST') => {
+    const { dashboardService, currentShift } = get();
+    set({ isLoading: true, error: null });
+    
+    try {
+      await dashboardService.registerEvent(currentShift, eventType);
+      set({ isLoading: false });
+    } catch (error) {
+      console.error('Erro ao registrar evento:', error);
+      set({ 
+        error: error instanceof Error ? error.message : 'Erro ao registrar evento',
+        isLoading: false 
+      });
+    }
+  },
+
+  registerStopReason: async (reason: string) => {
+    const { dashboardService, currentShift } = get();
+    set({ isLoading: true, error: null });
+    
+    try {
+      // Registrar o motivo da parada
+      await dashboardService.registerEvent(currentShift, 'DOWN');
+      
+      set(state => {
+        const previousView = state.previousView || ViewState.DASHBOARD;
+        const updatedHistory = state.downtimeHistory.map(event => 
+          event.id === state.currentDowntimeEventId 
+            ? { 
+                ...event, 
+                reason,
+                endDate: new Date().toISOString().split('T')[0],
+                endTime: new Date().toLocaleTimeString(),
+                totalTime: '0' // Será calculado pelo backend
+              } 
+            : event
+        );
+        
+        console.log('✅ Motivo da parada registrado:', { reason, previousView });
+        
+        return {
+          downtimeHistory: updatedHistory,
+          currentDowntimeEventId: null,
+          machineStatus: MachineStatus.RUNNING,
+          view: previousView,
+          previousView: null,
+          isLoading: false,
+        };
+      });
+    } catch (error) {
+      console.error('Erro ao registrar motivo da parada:', error);
+      set({ 
+        error: error instanceof Error ? error.message : 'Erro ao registrar motivo',
+        isLoading: false 
+      });
+    }
   },
 
   selectProductionOrder: (order: ProductionOrder) => {
@@ -200,8 +351,8 @@ export const useProductionStore = create<ProductionState>((set, get) => ({
     const lineBasedData = {
       'line-1': { // ENVASE 520741-8
         total: 240,
-        good: 213,
-        rejects: 3,
+        good: 240, // Todas as peças são boas (sem rejeitos)
+        rejects: 0, // Zerar rejeitos
         oee: 80.1,
         currentJob: {
           orderId: '5207418',
@@ -212,8 +363,8 @@ export const useProductionStore = create<ProductionState>((set, get) => ({
       },
       'line-2': { // ENVASE 520741-9
         total: 180,
-        good: 165,
-        rejects: 5,
+        good: 180, // Todas as peças são boas (sem rejeitos)
+        rejects: 0, // Zerar rejeitos
         oee: 75.3,
         currentJob: {
           orderId: '5207419',
@@ -224,8 +375,8 @@ export const useProductionStore = create<ProductionState>((set, get) => ({
       },
       'line-3': { // EMBALAGEM 520741-10
         total: 320,
-        good: 295,
-        rejects: 8,
+        good: 320, // Todas as peças são boas (sem rejeitos)
+        rejects: 0, // Zerar rejeitos
         oee: 85.7,
         currentJob: {
           orderId: '5207420',
@@ -243,7 +394,7 @@ export const useProductionStore = create<ProductionState>((set, get) => ({
           ...state.liveMetrics,
           total: data.total,
           good: data.good,
-          rejects: data.rejects,
+          rejects: 0, // Zerar rejeitos
           oee: data.oee,
           productionOrderProgress: data.good,
         },
@@ -254,41 +405,56 @@ export const useProductionStore = create<ProductionState>((set, get) => ({
 
   setCurrentShift: (shift: Shift) => {
     set({ currentShift: shift });
-    // Simular atualização dos dados baseado no turno
-    // Em um sistema real, isso dispararia uma API call
-    const shiftBasedData = {
-      'shift-1': { // TURNO 1
-        timeInShift: 6.5,
-        totalShiftTime: 8.0,
-        avgSpeed: 25.2,
-        instantSpeed: 26.8,
-      },
-      'shift-2': { // TURNO 2
-        timeInShift: 2.3,
-        totalShiftTime: 7.8,
-        avgSpeed: 27.6,
-        instantSpeed: 29.3,
-      },
-      'shift-3': { // TURNO 3
-        timeInShift: 4.1,
-        totalShiftTime: 8.0,
-        avgSpeed: 23.8,
-        instantSpeed: 24.5,
-      }
-    };
     
-    const data = shiftBasedData[shift.id as keyof typeof shiftBasedData];
-    if (data) {
-      set(state => ({
-        liveMetrics: {
-          ...state.liveMetrics,
-          timeInShift: data.timeInShift,
-          totalShiftTime: data.totalShiftTime,
-          avgSpeed: data.avgSpeed,
-          instantSpeed: data.instantSpeed,
+    // Atualizar dados da API com o novo turno selecionado
+    const { dashboardService } = get();
+    
+    // Buscar dados atualizados do turno selecionado
+    dashboardService.initializeDashboardData(shift).then(data => {
+      set({
+        liveMetrics: data.liveMetrics,
+        currentJob: data.currentJob,
+        currentProductionLine: data.productionLine,
+        currentShift: data.shift,
+      });
+      console.log('🔄 Store: Dados atualizados para o turno:', shift.name);
+    }).catch(error => {
+      console.error('❌ Store: Erro ao atualizar dados do turno:', error);
+      // Em caso de erro, usar dados simulados como fallback
+      const shiftBasedData = {
+        'shift-1': { // TURNO 1
+          timeInShift: 6.5,
+          totalShiftTime: 8.0,
+          avgSpeed: 25.2,
+          instantSpeed: 26.8,
+        },
+        'shift-2': { // TURNO 2
+          timeInShift: 2.3,
+          totalShiftTime: 7.8,
+          avgSpeed: 27.6,
+          instantSpeed: 29.3,
+        },
+        'shift-3': { // TURNO 3
+          timeInShift: 4.1,
+          totalShiftTime: 8.0,
+          avgSpeed: 23.8,
+          instantSpeed: 24.5,
         }
-      }));
-    }
+      };
+      
+      const data = shiftBasedData[shift.id as keyof typeof shiftBasedData];
+      if (data) {
+        set(state => ({
+          liveMetrics: {
+            ...state.liveMetrics,
+            timeInShift: data.timeInShift,
+            totalShiftTime: data.totalShiftTime,
+            avgSpeed: data.avgSpeed,
+            instantSpeed: data.instantSpeed,
+          }
+        }));
+      }
+    });
   },
 
   createProductionLine: (lineData: Omit<ProductionLine, 'id'>) => {
@@ -309,5 +475,66 @@ export const useProductionStore = create<ProductionState>((set, get) => ({
     set(state => ({
       shifts: [...state.shifts, newShift],
     }));
+  },
+
+  clearError: () => {
+    set({ error: null });
+  },
+
+  loadRealShifts: async () => {
+    const { shiftService } = get();
+    console.log('🔄 Store: Carregando turnos da API...');
+    set({ isLoading: true, error: null });
+    
+    try {
+      // Buscar todos os apontamentos (turnos) - sempre há pelo menos um
+      const apontamentos = await shiftService.getApontamentos(1, 10);
+      const realShifts = shiftService.convertToShifts(apontamentos);
+      
+      console.log('✅ Store: Turnos carregados:', realShifts);
+      
+      // Sempre definir um turno atual (primeiro da lista ou ativo)
+      let currentShift = realShifts[0]; // Primeiro turno da lista
+      
+      // Se há turnos ativos, usar o primeiro ativo
+      const activeShifts = realShifts.filter(shift => shift.isActive);
+      if (activeShifts.length > 0) {
+        currentShift = activeShifts[0];
+        console.log('✅ Store: Turno ativo encontrado:', currentShift.name);
+      } else {
+        console.log('⚠️ Store: Nenhum turno ativo, usando primeiro turno da lista:', currentShift.name);
+      }
+      
+      set({
+        shifts: realShifts,
+        currentShift: currentShift,
+        isLoading: false,
+      });
+      
+      return true; // Sempre há um turno
+    } catch (error) {
+      console.error('❌ Store: Erro ao carregar turnos:', error);
+      set({ 
+        error: error instanceof Error ? error.message : 'Erro ao carregar turnos',
+        isLoading: false 
+      });
+      return false;
+    }
+  },
+
+  fetchOeeHistory: async (period: string = '1h') => {
+    const { dashboardService, currentShift } = get();
+    console.log('📊 Store: Buscando histórico OEE...', { period, currentShift: currentShift?.name });
+    
+    try {
+      const historyData = await dashboardService.getOeeHistory(currentShift, period);
+      set({ oeeHistory: historyData });
+      console.log('✅ Store: Histórico OEE carregado:', historyData);
+    } catch (error) {
+      console.error('❌ Store: Erro ao buscar histórico OEE:', error);
+      // Em caso de erro, usar dados mockados como fallback
+      const mockData = dashboardService.getMockOeeHistory(period);
+      set({ oeeHistory: mockData });
+    }
   },
 }));

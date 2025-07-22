@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useProductionStore } from '../store/useProductionStore';
 import { ViewState } from '../types';
 import Header from '../components/features/dashboard/Header';
@@ -17,21 +17,22 @@ import ShiftModal from '../components/features/modals/ShiftModal';
 import { useLiveDataPolling } from '../hooks/useLiveDataPolling';
 import Card from '../components/ui/Card';
 import Sidebar from '../components/features/dashboard/Sidebar';
+import LoadingSpinner from '../components/ui/LoadingSpinner';
+import ErrorMessage from '../components/ui/ErrorMessage';
+import { config } from '../config/environment';
 
 const DashboardView: React.FC = () => {
   const { liveMetrics, currentJob } = useProductionStore();
-  const goodPartsPercent = liveMetrics.total > 0 ? (liveMetrics.good / liveMetrics.total) * 100 : 100;
-  const rejectsPercent = liveMetrics.total > 0 ? (liveMetrics.rejects / liveMetrics.total) * 100 : 0;
+  const goodPartsPercent = liveMetrics.total > 0 ? (liveMetrics.good / liveMetrics.total) * 100 : 100; // Sempre 100% (sem rejeitos)
 
   return (
     <div className="space-y-4">
        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* First Column */}
         <div className="lg:col-span-2 space-y-4">
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 gap-4">
             <KpiCard title="TOTAL" value={liveMetrics.total} />
             <KpiCard title="BOAS" value={liveMetrics.good} />
-            <KpiCard title="REJEITOS" value={liveMetrics.rejects} valueClassName="text-danger" />
           </div>
           <Card className="flex justify-between items-center p-4">
              <StatusDisplay />
@@ -39,10 +40,6 @@ const DashboardView: React.FC = () => {
                 <div className="flex items-center justify-end gap-2">
                     <span className="text-success">Good Parts</span>
                     <span className="font-bold text-lg">{goodPartsPercent.toFixed(1)}%</span>
-                </div>
-                <div className="flex items-center justify-end gap-2">
-                    <span className="text-danger">Rejects</span>
-                    <span className="font-bold text-lg">{rejectsPercent.toFixed(1)}%</span>
                 </div>
              </div>
           </Card>
@@ -69,9 +66,14 @@ const DashboardView: React.FC = () => {
 
 
 const DashboardPage: React.FC = () => {
-  const { view, setView } = useProductionStore();
+  const { view, setView, initializeDashboard, isLoading, error, currentShift } = useProductionStore();
   
-  useLiveDataPolling(3000);
+  useLiveDataPolling(config.pollingInterval);
+
+  // Inicializar dados do dashboard na primeira carga
+  useEffect(() => {
+    initializeDashboard();
+  }, [initializeDashboard]);
 
   const renderView = () => {
     switch (view) {
@@ -99,6 +101,34 @@ const DashboardPage: React.FC = () => {
       </div>
     );
   }
+
+  // Mostrar loading durante inicialização
+  if (isLoading) {
+    return (
+      <div className="p-4 sm:p-6 lg:p-8 bg-background min-h-screen ml-16 flex items-center justify-center">
+        <LoadingSpinner size="lg" />
+      </div>
+    );
+  }
+
+  // Mostrar erro se houver
+  if (error) {
+    return (
+      <div className="p-4 sm:p-6 lg:p-8 bg-background min-h-screen ml-16">
+        <Header />
+        <main className="mt-6">
+          <Sidebar />
+          <ErrorMessage 
+            message={error} 
+            onRetry={initializeDashboard}
+            onDismiss={() => useProductionStore.getState().clearError()}
+          />
+        </main>
+      </div>
+    );
+  }
+
+
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 bg-background min-h-screen ml-16">

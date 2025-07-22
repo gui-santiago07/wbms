@@ -1,9 +1,11 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import ApiClient from '../services/api';
+import { cleanPhpSerializedString, cleanPhpSerializedObject } from '../utils/stringUtils';
 
 interface User {
   id: string;
   name: string;
-  email: string;
+  username: string;
   role: string;
 }
 
@@ -11,36 +13,14 @@ interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<boolean>;
+  login: (username: string, password: string) => Promise<boolean>;
   logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Usuários mockados para demonstração
-const mockUsers = [
-  {
-    id: '1',
-    name: 'João Silva',
-    email: 'joao@empresa.com',
-    password: '123456',
-    role: 'Operador'
-  },
-  {
-    id: '2',
-    name: 'Maria Santos',
-    email: 'maria@empresa.com',
-    password: '123456',
-    role: 'Supervisor'
-  },
-  {
-    id: '3',
-    name: 'Admin Sistema',
-    email: 'admin@empresa.com',
-    password: 'admin123',
-    role: 'Administrador'
-  }
-];
+// Cliente da API para autenticação
+const apiClient = new ApiClient();
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -52,7 +32,25 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (savedUser) {
       try {
         const parsedUser = JSON.parse(savedUser);
-        setUser(parsedUser);
+        
+        // Verificar se o usuário salvo tem a estrutura antiga (com email)
+        // e converter para a nova estrutura (com username)
+        if (parsedUser.email && !parsedUser.username) {
+          console.log('Convertendo usuário antigo para nova estrutura');
+          const updatedUser = {
+            ...parsedUser,
+            username: cleanPhpSerializedString(parsedUser.email), // Limpar string serializada
+            email: undefined // Remover campo email
+          };
+          delete updatedUser.email;
+          setUser(updatedUser);
+          localStorage.setItem('oee_user', JSON.stringify(updatedUser));
+        } else {
+          // Limpar strings serializadas em dados existentes
+          const cleanedUser = cleanPhpSerializedObject(parsedUser, ['name', 'username']);
+          setUser(cleanedUser);
+          localStorage.setItem('oee_user', JSON.stringify(cleanedUser));
+        }
       } catch (error) {
         console.error('Erro ao recuperar usuário do localStorage:', error);
         localStorage.removeItem('oee_user');
@@ -61,33 +59,29 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setIsLoading(false);
   }, []);
 
-  const login = async (email: string, password: string): Promise<boolean> => {
+  const login = async (username: string, password: string): Promise<boolean> => {
     setIsLoading(true);
     
-    // Simular delay de requisição
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    // Verificar credenciais
-    const foundUser = mockUsers.find(
-      u => u.email === email && u.password === password
-    );
-    
-    if (foundUser) {
+    try {
+      // Usar a API real para autenticação
+      const response = await apiClient.login(username, password);
+      
       const userToStore = {
-        id: foundUser.id,
-        name: foundUser.name,
-        email: foundUser.email,
-        role: foundUser.role
+        id: '1', // ID será fornecido pela API real
+        name: cleanPhpSerializedString(response.nome), // Limpar nome serializado
+        username: cleanPhpSerializedString(username), // Limpar username serializado
+        role: 'Operador' // Role será fornecido pela API real
       };
       
       setUser(userToStore);
       localStorage.setItem('oee_user', JSON.stringify(userToStore));
       setIsLoading(false);
       return true;
+    } catch (error) {
+      console.error('Erro no login:', error);
+      setIsLoading(false);
+      return false;
     }
-    
-    setIsLoading(false);
-    return false;
   };
 
   const logout = () => {

@@ -4,7 +4,7 @@ import { Navigate } from 'react-router-dom';
 import Card from '../components/ui/Card';
 
 const LoginPage: React.FC = () => {
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [showCredentials, setShowCredentials] = useState(false);
@@ -19,21 +19,21 @@ const LoginPage: React.FC = () => {
     e.preventDefault();
     setError('');
 
-    if (!email || !password) {
+    if (!username || !password) {
       setError('Por favor, preencha todos os campos');
       return;
     }
 
-    const success = await login(email, password);
+    const success = await login(username, password);
     if (!success) {
-      setError('Email ou senha incorretos');
+      setError('Usuário ou senha incorretos');
     }
   };
 
   const mockCredentials = [
-    { email: 'joao@empresa.com', password: '123456', role: 'Operador' },
-    { email: 'maria@empresa.com', password: '123456', role: 'Supervisor' },
-    { email: 'admin@empresa.com', password: 'admin123', role: 'Administrador' }
+    { username: 'joao.operador', password: '123456', role: 'Operador' },
+    { username: 'maria.supervisor', password: '123456', role: 'Supervisor' },
+    { username: 'admin', password: 'admin123', role: 'Administrador' }
   ];
 
   return (
@@ -64,16 +64,16 @@ const LoginPage: React.FC = () => {
             )}
 
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-white mb-2">
-                Email
+              <label htmlFor="username" className="block text-sm font-medium text-white mb-2">
+                Usuário
               </label>
               <input
-                type="email"
-                id="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                type="text"
+                id="username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
                 className="w-full px-4 py-3 bg-surface border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                placeholder="seu@email.com"
+                placeholder="seu.usuario"
                 disabled={isLoading}
               />
             </div>
@@ -131,7 +131,7 @@ const LoginPage: React.FC = () => {
                       <span className="text-white font-medium">{cred.role}</span>
                       <button
                         onClick={() => {
-                          setEmail(cred.email);
+                          setUsername(cred.username);
                           setPassword(cred.password);
                         }}
                         className="text-primary hover:text-primary/80 text-xs"
@@ -140,7 +140,7 @@ const LoginPage: React.FC = () => {
                       </button>
                     </div>
                     <div className="text-muted">
-                      <div>Email: {cred.email}</div>
+                      <div>Usuário: {cred.username}</div>
                       <div>Senha: {cred.password}</div>
                     </div>
                   </div>

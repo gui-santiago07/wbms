@@ -75,19 +75,36 @@ const StopReasonModal: React.FC = () => {
   const [customReason, setCustomReason] = useState<string>('');
   const [showProductionLineModal, setShowProductionLineModal] = useState(false);
   const [showShiftModal, setShowShiftModal] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const currentTime = useClock();
   const { user } = useAuth();
 
-  const handleReasonSelect = (reason: string) => {
+  const handleReasonSelect = async (reason: string) => {
+    if (isSubmitting) {
+      console.log('⚠️ Já está processando uma seleção de motivo...');
+      return;
+    }
+    
+    console.log('🔄 Selecionando motivo da parada:', reason);
+    setIsSubmitting(true);
     setSelectedReason(reason);
-    registerStopReason(reason);
-    setShowReasonModal(false);
-    setCustomReason(''); // Limpar campo customizado
+    
+    try {
+      await registerStopReason(reason);
+      console.log('✅ Motivo registrado com sucesso, fechando modal...');
+      setShowReasonModal(false);
+      setCustomReason(''); // Limpar campo customizado
+    } catch (error) {
+      console.error('❌ Erro ao registrar motivo:', error);
+      // Não fechar o modal em caso de erro
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleCustomReasonSubmit = () => {
-    if (customReason.trim()) {
-      handleReasonSelect(customReason.trim());
+  const handleCustomReasonSubmit = async () => {
+    if (customReason.trim() && !isSubmitting) {
+      await handleReasonSelect(customReason.trim());
     }
   };
 
@@ -237,17 +254,12 @@ const StopReasonModal: React.FC = () => {
               </div>
             </Card>
 
-            {/* Good Parts e Rejects */}
+            {/* Good Parts */}
             <div className="flex justify-between items-center">
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 bg-green-500 rounded-full"></div>
                 <span className="text-white text-sm">Good Parts</span>
-                <span className="text-white font-bold text-sm">(98,6%)</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-                <span className="text-white text-sm">Rejects</span>
-                <span className="text-white font-bold text-sm">(0,4%)</span>
+                <span className="text-white font-bold text-sm">(100%)</span>
               </div>
             </div>
           </div>
@@ -285,20 +297,16 @@ const StopReasonModal: React.FC = () => {
             <Card className="p-4 bg-gray-800">
               <div className="flex items-end justify-center gap-3 h-24 mb-3">
                 {[
-                  { height: 70, good: true },
-                  { height: 60, good: true },
-                  { height: 80, good: true },
-                  { height: 55, good: true }
+                  { height: 70 },
+                  { height: 60 },
+                  { height: 80 },
+                  { height: 55 }
                 ].map((bar, index) => (
                   <div key={index} className="flex flex-col items-center">
                     <div className="flex flex-col items-center">
                       <div 
-                        className="bg-green-500 w-8 rounded-t"
+                        className="bg-green-500 w-8 rounded"
                         style={{ height: `${bar.height}px` }}
-                      />
-                      <div 
-                        className="bg-red-500 w-8 rounded-b"
-                        style={{ height: `${Math.random() * 10 + 5}px` }}
                       />
                     </div>
                     <div className="text-xs text-gray-400 mt-1">{index + 1}h</div>
@@ -310,10 +318,6 @@ const StopReasonModal: React.FC = () => {
                   <div className="flex items-center gap-1">
                     <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                     <span className="text-white">Boas</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                    <span className="text-white">Rejeitos</span>
                   </div>
                 </div>
               </div>
@@ -405,10 +409,17 @@ const StopReasonModal: React.FC = () => {
                   />
                   <button
                     onClick={handleCustomReasonSubmit}
-                    disabled={!customReason.trim()}
-                    className="bg-primary hover:bg-primary/80 disabled:bg-gray-600 disabled:cursor-not-allowed text-white px-4 py-2 rounded-md transition-colors"
+                    disabled={!customReason.trim() || isSubmitting}
+                    className="bg-primary hover:bg-primary/80 disabled:bg-gray-600 disabled:cursor-not-allowed text-white px-4 py-2 rounded-md transition-colors flex items-center gap-2"
                   >
-                    Confirmar
+                    {isSubmitting ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        Processando...
+                      </>
+                    ) : (
+                      'Confirmar'
+                    )}
                   </button>
                 </div>
                 
@@ -455,7 +466,8 @@ const StopReasonModal: React.FC = () => {
                   <button
                     key={reason.id}
                     onClick={() => handleReasonSelect(reason.description)}
-                    className="bg-background hover:bg-primary/50 text-white p-4 rounded-lg transition-colors text-center border border-gray-600 hover:border-primary"
+                    disabled={isSubmitting}
+                    className="bg-background hover:bg-primary/50 text-white p-4 rounded-lg transition-colors text-center border border-gray-600 hover:border-primary disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <p className="font-semibold">{reason.description}</p>
                     <p className="text-xs text-muted">{reason.code}</p>
