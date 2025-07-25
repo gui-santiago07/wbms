@@ -3,9 +3,12 @@ import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import ProtectedRoute from './components/auth/ProtectedRoute';
+import SetupRequiredRoute from './components/auth/SetupRequiredRoute';
 import LoginPage from './pages/LoginPage';
+import SetupPage from './pages/SetupPage';
 import DashboardPage from './pages/DashboardPage';
 import DeviceSettingsPage from './pages/DeviceSettingsPage';
+import ProductionControlPage from './pages/ProductionControlPage';
 import OeeScreen from './components/features/dashboard/OeeScreen';
 import DebugPanel from './components/ui/DebugPanel';
 
@@ -17,44 +20,57 @@ const App: React.FC = () => {
           {/* Rota de login */}
           <Route path="/login" element={<LoginPage />} />
           
-          {/* Rotas protegidas */}
-          <Route path="/" element={
+          {/* Rota de setup - protegida mas não requer setup completo */}
+          <Route path="/setup" element={
             <ProtectedRoute>
-              <Navigate to="/oee" replace />
+              <SetupPage />
             </ProtectedRoute>
+          } />
+          
+          {/* Rotas protegidas que requerem setup completo */}
+          <Route path="/" element={
+            <SetupRequiredRoute>
+              <Navigate to="/oee" replace />
+            </SetupRequiredRoute>
           } />
           
           <Route path="/oee" element={
-            <ProtectedRoute>
+            <SetupRequiredRoute>
               <OeeScreen />
-            </ProtectedRoute>
+            </SetupRequiredRoute>
           } />
           
           <Route path="/dashboard" element={
-            <ProtectedRoute>
+            <SetupRequiredRoute>
               <DashboardPage />
-            </ProtectedRoute>
+            </SetupRequiredRoute>
+          } />
+          
+          <Route path="/production" element={
+            <SetupRequiredRoute>
+              <ProductionControlPage />
+            </SetupRequiredRoute>
           } />
           
           <Route path="/settings/devices" element={
-            <ProtectedRoute>
+            <SetupRequiredRoute>
               <DeviceSettingsPage />
-            </ProtectedRoute>
+            </SetupRequiredRoute>
           } />
           
           <Route path="/settings" element={
-            <ProtectedRoute>
+            <SetupRequiredRoute>
               <div className="p-4 sm:p-6 lg:p-8 bg-background min-h-screen ml-16">
                 <div className="bg-surface rounded-lg p-8 text-center">
                   <h1 className="text-2xl font-bold text-white mb-4">Configurações</h1>
                   <p className="text-muted">Página de configurações em desenvolvimento</p>
                 </div>
               </div>
-            </ProtectedRoute>
+            </SetupRequiredRoute>
           } />
           
           {/* Rota de fallback */}
-          <Route path="*" element={<Navigate to="/oee" replace />} />
+          <Route path="*" element={<Navigate to="/setup" replace />} />
         </Routes>
         
         {/* Debug Panel - sempre visível */}

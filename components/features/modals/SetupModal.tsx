@@ -1,12 +1,20 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useProductionStore } from '../../../store/useProductionStore';
+import { useProductionControlStore } from '../../../store/useProductionControlStore';
 import Card from '../../ui/Card';
+import LoadingSpinner from '../../ui/LoadingSpinner';
 import { ProductionOrder, Product } from '../../../types';
 
 const SetupModal: React.FC = () => {
-  const { productionOrders, products, selectProductionOrder, startProduction, currentJob } = useProductionStore();
+  const { productionOrders, selectProductionOrder, startProduction, currentJob } = useProductionStore();
+  const { availableProducts, loadAvailableProducts, isLoading, error } = useProductionControlStore();
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+
+  // Carregar produtos quando o modal for aberto
+  useEffect(() => {
+    loadAvailableProducts();
+  }, [loadAvailableProducts]);
 
   const handleSelectOrder = (order: ProductionOrder) => {
     setSelectedOrderId(order.id);
@@ -39,7 +47,16 @@ const SetupModal: React.FC = () => {
         </Card>
         <Card>
           <h3 className="text-lg font-semibold mb-3">Produto Selecionado</h3>
-          {currentJob ? (
+          {isLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <LoadingSpinner size="sm" />
+              <span className="ml-2 text-muted">Carregando...</span>
+            </div>
+          ) : error ? (
+            <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
+              <p className="text-red-400 text-sm">Erro: {error}</p>
+            </div>
+          ) : currentJob ? (
             <div className="bg-gray-700 p-4 rounded-lg">
                 <p className="text-sm text-muted">{currentJob.productId}</p>
                 <p className="text-lg font-bold text-white">{currentJob.productName}</p>

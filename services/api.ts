@@ -74,12 +74,21 @@ class ApiClient {
 
   // Headers com autenticação
   private getHeaders(): HeadersInit {
+    // ✅ Sempre atualizar token do localStorage antes de fazer requisição
+    this.updateTokenFromStorage();
+    
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
     };
 
     if (this.token) {
       headers['Authorization'] = `Bearer ${this.token}`;
+      console.log('🔐 Bearer token incluído nos headers:', {
+        tokenPreview: `${this.token.substring(0, 20)}...`,
+        fullHeader: `Bearer ${this.token}`
+      });
+    } else {
+      console.warn('⚠️ Nenhum token encontrado para autenticação');
     }
 
     return headers;
@@ -88,15 +97,19 @@ class ApiClient {
   // Login e obtenção de token
   async login(username: string, password: string): Promise<{ token: string; nome: string }> {
     const url = `${this.baseUrl}/user/login`;
-    const body = { username, password };
     
-    logRequest('POST', url, { 'Content-Type': 'application/json' }, body);
+    // ✅ Usar x-www-form-urlencoded conforme documentação da API Option7
+    const formData = new URLSearchParams();
+    formData.append('username', username);
+    formData.append('password', password);
+    
+    logRequest('POST', url, { 'Content-Type': 'application/x-www-form-urlencoded' }, formData.toString());
     
     try {
       const response = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: formData
       });
 
       console.log('📊 Login Response Status:', response.status);
@@ -144,6 +157,33 @@ class ApiClient {
   // Verificar se está autenticado
   isAuthenticated(): boolean {
     return this.token !== null;
+  }
+
+  // Atualizar token do localStorage (útil quando o token é atualizado em outro lugar)
+  updateTokenFromStorage(): void {
+    const storedToken = localStorage.getItem('mobile_api_token');
+    if (storedToken && storedToken !== this.token) {
+      this.token = storedToken;
+      console.log('🔄 Token atualizado do localStorage:', {
+        tokenPreview: `${storedToken.substring(0, 20)}...`
+      });
+    }
+  }
+
+  // Verificar se o token está sendo enviado corretamente
+  getCurrentHeaders(): HeadersInit {
+    return this.getHeaders();
+  }
+
+  // Debug: mostrar informações do token atual
+  debugTokenInfo(): void {
+    console.log('🔍 Debug Token Info:', {
+      hasToken: !!this.token,
+      tokenLength: this.token?.length || 0,
+      tokenPreview: this.token ? `${this.token.substring(0, 20)}...` : 'null',
+      localStorageToken: localStorage.getItem('mobile_api_token') ? 'present' : 'missing',
+      headers: this.getHeaders()
+    });
   }
 
   // Logout
@@ -224,6 +264,111 @@ class ApiClient {
       return responseData;
     } catch (error) {
       logError('POST', url, error);
+      throw error;
+    }
+  }
+
+  // Requisição PUT genérica
+  async put<T>(endpoint: string, data: any): Promise<T> {
+    const url = `${this.baseUrl}${endpoint}`;
+    const headers = this.getHeaders();
+    
+    logRequest('PUT', url, headers, data);
+    
+    try {
+      const response = await fetch(url, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify(data)
+      });
+
+      console.log('📊 PUT Response Status:', response.status);
+      console.log('📋 PUT Response Headers:', Object.fromEntries(response.headers.entries()));
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ PUT failed:', {
+          status: response.status,
+          statusText: response.statusText,
+          errorText
+        });
+        throw new Error(`Erro na requisição PUT: ${response.status} ${response.statusText} - ${errorText}`);
+      }
+
+      const responseData = await response.json();
+      logResponse('PUT', url, response.status, responseData);
+      return responseData;
+    } catch (error) {
+      logError('PUT', url, error);
+      throw error;
+    }
+  }
+
+  // Requisição PATCH genérica
+  async patch<T>(endpoint: string, data: any): Promise<T> {
+    const url = `${this.baseUrl}${endpoint}`;
+    const headers = this.getHeaders();
+    
+    logRequest('PATCH', url, headers, data);
+    
+    try {
+      const response = await fetch(url, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify(data)
+      });
+
+      console.log('📊 PATCH Response Status:', response.status);
+      console.log('📋 PATCH Response Headers:', Object.fromEntries(response.headers.entries()));
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ PATCH failed:', {
+          status: response.status,
+          statusText: response.statusText,
+          errorText
+        });
+        throw new Error(`Erro na requisição PATCH: ${response.status} ${response.statusText} - ${errorText}`);
+      }
+
+      const responseData = await response.json();
+      logResponse('PATCH', url, response.status, responseData);
+      return responseData;
+    } catch (error) {
+      logError('PATCH', url, error);
+      throw error;
+    }
+  }
+
+  // Requisição DELETE genérica
+  async delete(endpoint: string): Promise<void> {
+    const url = `${this.baseUrl}${endpoint}`;
+    const headers = this.getHeaders();
+    
+    logRequest('DELETE', url, headers);
+    
+    try {
+      const response = await fetch(url, {
+        method: 'DELETE',
+        headers
+      });
+
+      console.log('📊 DELETE Response Status:', response.status);
+      console.log('📋 DELETE Response Headers:', Object.fromEntries(response.headers.entries()));
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ DELETE failed:', {
+          status: response.status,
+          statusText: response.statusText,
+          errorText
+        });
+        throw new Error(`Erro na requisição DELETE: ${response.status} ${response.statusText} - ${errorText}`);
+      }
+
+      logResponse('DELETE', url, response.status, 'Success');
+    } catch (error) {
+      logError('DELETE', url, error);
       throw error;
     }
   }

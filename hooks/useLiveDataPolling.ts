@@ -12,7 +12,8 @@ export const useLiveDataPolling = (intervalMs: number) => {
       try {
         await fetchLiveData();
       } catch (error) {
-        console.error('Erro no polling:', error);
+        console.error('Erro no polling (tratado silenciosamente):', error);
+        // Não propagar erro - tratamento silencioso
       }
     }, intervalMs);
 

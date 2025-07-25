@@ -5,6 +5,7 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { useProductionStore } from '../../../store/useProductionStore';
 import ProductionLineModal from '../modals/ProductionLineModal';
 import ShiftModal from '../modals/ShiftModal';
+import StatusDisplay from './StatusDisplay';
 
 const Header: React.FC = () => {
   const currentTime = useClock();
@@ -21,31 +22,34 @@ const Header: React.FC = () => {
 
   return (
     <header className="flex justify-between items-center">
-      <div className="flex items-center gap-4">
-        <div className="bg-primary p-3 rounded-md flex items-center justify-center">
-          <img 
-            src="/assets/images/logo/option7-logo.svg" 
-            alt="Option7" 
-            className="h-8 w-auto"
-          />
+              <div className="flex items-center gap-4">
+          <div className="bg-primary p-3 rounded-md flex items-center justify-center">
+            <img 
+              src="/assets/images/logo/option7-logo.svg" 
+              alt="Option7" 
+              className="h-8 w-auto"
+            />
+          </div>
+          <div>
+            <button
+              onClick={() => setShowProductionLineModal(true)}
+              className="text-2xl md:text-3xl font-bold text-white tracking-tight hover:text-primary transition-colors cursor-pointer"
+            >
+              {currentProductionLine?.name || 'Linha de Produção'}
+            </button>
+            <p className="text-sm text-muted">Production Monitoring Dashboard</p>
+          </div>
         </div>
-        <div>
-          <button
-            onClick={() => setShowProductionLineModal(true)}
-            className="text-2xl md:text-3xl font-bold text-white tracking-tight hover:text-primary transition-colors cursor-pointer"
-          >
-            {currentProductionLine?.name || 'ENVASE 520741-8'}
-          </button>
-          <p className="text-sm text-muted">Production Monitoring Dashboard</p>
-        </div>
-      </div>
+        
+        {/* Status Display */}
+        <StatusDisplay />
       <div className="flex items-center gap-6">
         <div className="text-center">
           <button
             onClick={() => setShowShiftModal(true)}
             className="text-xl font-semibold text-white hover:text-primary transition-colors cursor-pointer"
           >
-            {currentShift?.name || 'TURNO 2'}
+            {currentShift?.name || 'Turno'}
           </button>
         </div>
         <div className="text-right">

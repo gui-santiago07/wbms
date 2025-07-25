@@ -59,7 +59,9 @@ const DashboardView: React.FC = () => {
             <ProductionChart />
         </div>
       </div>
-      <MachineControls />
+      
+      {/* Espaçamento para o Machine Controls fixo */}
+      <div className="pb-32"></div>
     </div>
   );
 };
@@ -111,32 +113,23 @@ const DashboardPage: React.FC = () => {
     );
   }
 
-  // Mostrar erro se houver
-  if (error) {
-    return (
-      <div className="p-4 sm:p-6 lg:p-8 bg-background min-h-screen ml-16">
-        <Header />
-        <main className="mt-6">
-          <Sidebar />
-          <ErrorMessage 
-            message={error} 
-            onRetry={initializeDashboard}
-            onDismiss={() => useProductionStore.getState().clearError()}
-          />
-        </main>
-      </div>
-    );
-  }
+  // Não mostrar erro na interface - tratamento silencioso
+  // Os erros são apenas logados no console
 
 
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 bg-background min-h-screen ml-16">
-      <Header />
-      <main className="mt-6">
-        <Sidebar />
-        {renderView()}
-      </main>
+    <div className="bg-background min-h-screen ml-16">
+      <div className="p-4 sm:p-6 lg:p-8">
+        <Header />
+        <main className="mt-6">
+          <Sidebar />
+          {renderView()}
+        </main>
+      </div>
+      
+      {/* Machine Controls Fixo - apenas para a view DASHBOARD */}
+      {view === ViewState.DASHBOARD && <MachineControls isFixed={true} />}
     </div>
   );
 };

@@ -30,6 +30,23 @@ export default defineConfig(({ mode }) => {
                 console.log('Received Response from the Target:', proxyRes.statusCode, req.url);
               });
             },
+          },
+          // Proxy para API Option7 (resolve CORS em desenvolvimento)
+          '/api': {
+            target: 'http://localhost:8090',
+            changeOrigin: true,
+            secure: false,
+            configure: (proxy, options) => {
+              proxy.on('error', (err, req, res) => {
+                console.log('🚨 Option7 API Proxy Error:', err.message);
+              });
+              proxy.on('proxyReq', (proxyReq, req, res) => {
+                console.log('🚀 Option7 API Request:', req.method, req.url);
+              });
+              proxy.on('proxyRes', (proxyRes, req, res) => {
+                console.log('✅ Option7 API Response:', proxyRes.statusCode, req.url);
+              });
+            },
           }
         }
       }

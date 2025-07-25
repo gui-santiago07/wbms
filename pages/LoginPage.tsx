@@ -1,40 +1,39 @@
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import Card from '../components/ui/Card';
 
 const LoginPage: React.FC = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const [showCredentials, setShowCredentials] = useState(false);
-  const { login, isAuthenticated, isLoading } = useAuth();
+  const [isLoading, setIsLoading] = useState(false);
+  const { login, isAuthenticated, isLoading: authLoading } = useAuth();
+  const navigate = useNavigate();
 
-  // Se já estiver autenticado, redirecionar para OEE
+  // Se já estiver autenticado, redirecionar para setup ou OEE
   if (isAuthenticated) {
-    return <Navigate to="/oee" replace />;
+    return <Navigate to="/setup" replace />;
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsLoading(true);
     setError('');
 
-    if (!username || !password) {
-      setError('Por favor, preencha todos os campos');
-      return;
-    }
-
-    const success = await login(username, password);
-    if (!success) {
-      setError('Usuário ou senha incorretos');
+    try {
+      const success = await login(username, password);
+      if (success) {
+        navigate('/setup');
+      } else {
+        setError('Credenciais inválidas. Tente novamente.');
+      }
+    } catch (error) {
+      setError('Erro ao fazer login. Tente novamente.');
+    } finally {
+      setIsLoading(false);
     }
   };
-
-  const mockCredentials = [
-    { username: 'joao.operador', password: '123456', role: 'Operador' },
-    { username: 'maria.supervisor', password: '123456', role: 'Supervisor' },
-    { username: 'admin', password: 'admin123', role: 'Administrador' }
-  ];
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
@@ -111,43 +110,6 @@ const LoginPage: React.FC = () => {
               )}
             </button>
           </form>
-
-          {/* Credenciais de Teste */}
-          <div className="mt-6 pt-6 border-t border-gray-600">
-            <button
-              type="button"
-              onClick={() => setShowCredentials(!showCredentials)}
-              className="text-sm text-primary hover:text-primary/80 transition-colors"
-            >
-              {showCredentials ? 'Ocultar' : 'Mostrar'} credenciais de teste
-            </button>
-            
-            {showCredentials && (
-              <div className="mt-4 space-y-3">
-                <p className="text-sm text-muted">Usuários para teste:</p>
-                {mockCredentials.map((cred, index) => (
-                  <div key={index} className="bg-surface/50 p-3 rounded-lg text-sm">
-                    <div className="flex justify-between items-center mb-1">
-                      <span className="text-white font-medium">{cred.role}</span>
-                      <button
-                        onClick={() => {
-                          setUsername(cred.username);
-                          setPassword(cred.password);
-                        }}
-                        className="text-primary hover:text-primary/80 text-xs"
-                      >
-                        Usar
-                      </button>
-                    </div>
-                    <div className="text-muted">
-                      <div>Usuário: {cred.username}</div>
-                      <div>Senha: {cred.password}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
         </Card>
       </div>
     </div>

@@ -1,9 +1,11 @@
 
 import { create } from 'zustand';
-import { MachineStatus, ViewState, LiveMetrics, CurrentJob, DowntimeEvent, DowntimeReasonCategory, ProductionOrder, Product, ProductionLine, Shift } from '../types';
+import { MachineStatus, ViewState, LiveMetrics, CurrentJob, DowntimeEvent, DowntimeReasonCategory, ProductionOrder, Product, ProductionLine, Shift, TimeDistribution, StopReason, ProductionStatus, ProductSelection, SetupType, Job, ApiProduct, ApiShift } from '../types';
 import DashboardService from '../services/dashboardService';
 import ShiftService from '../services/shiftService';
 import WbmsService from '../services/wbmsService';
+import Option7ApiService from '../services/option7ApiService';
+import JobsService from '../services/jobsService';
 
 interface ProductionState {
   machineStatus: MachineStatus;
@@ -25,6 +27,8 @@ interface ProductionState {
   dashboardService: DashboardService;
   shiftService: ShiftService;
   wbmsService: WbmsService;
+  option7ApiService: Option7ApiService;
+  jobsService: JobsService;
   oeeHistory: {
     points: Array<{ x: number; y: number }>;
     timeLabels: string[];
@@ -32,12 +36,20 @@ interface ProductionState {
     trendColor: string;
   } | null;
   
+  // Novas propriedades WBMS
+  timeDistribution: TimeDistribution;
+  topStopReasons: StopReason[];
+  productionStatus: ProductionStatus;
+  availableProducts: ProductSelection[];
+  setupTypes: SetupType[];
+  showProductSelectionModal: boolean;
+  
   setMachineStatus: (status: MachineStatus) => void;
   setView: (view: ViewState) => void;
   fetchLiveData: () => Promise<void>;
   initializeDashboard: () => Promise<void>;
   fetchOeeHistory: (period: string) => Promise<void>;
-  registerStopReason: (reason: string) => Promise<void>;
+  registerStopReason: (reason: string, reasonId?: string) => Promise<void>;
   registerEvent: (eventType: 'DOWN' | 'SETUP' | 'PAUSE' | 'RUN' | 'ASSISTANCE_REQUEST') => Promise<void>;
   selectProductionOrder: (order: ProductionOrder) => void;
   startSetup: () => void;
@@ -48,44 +60,25 @@ interface ProductionState {
   createShift: (shift: Omit<Shift, 'id'>) => void;
   loadRealShifts: () => Promise<boolean>;
   clearError: () => void;
+  
+  // Novos métodos para API real
+  loadRealProductionOrders: () => Promise<void>;
+  loadCurrentShiftJobs: () => Promise<void>;
+  loadJobProducts: (jobId: string) => Promise<void>;
+  
+  // Novos métodos WBMS
+  fetchTimeDistribution: () => Promise<void>;
+  fetchTopStopReasons: () => Promise<void>;
+  updateProductionStatus: () => void;
+  selectProduct: (productId: string) => void;
+  startProductSetup: (setupTypeId: string) => void;
+  setShowProductSelectionModal: (show: boolean) => void;
+  fetchProductionTimeline: () => Promise<void>;
+  fetchDowntimeHistory: () => Promise<void>;
+  fetchDashboardComposite: () => Promise<void>;
+  fetchStopReasons: () => Promise<void>;
+  formatTime: (seconds: number) => string;
 }
-
-const mockDowntimeReasons: DowntimeReasonCategory[] = [
-    { category: 'Mechanical', reasons: [{id: 'm1', code: 'mech-01', description: 'Bearing Failure'}, {id: 'm2', code: 'mech-02', description: 'Belt Breakage'}, {id: 'm3', code: 'mech-03', description: 'Gear Damage'}, {id: 'm4', code: 'mech-04', description: 'Hydraulic Leak'}] },
-    { category: 'Operational', reasons: [{id: 'o1', code: 'oper-01', description: 'Material Shortage'}, {id: 'o2', code: 'oper-02', description: 'Operator Unavailable'}, {id: 'o3', code: 'oper-03', description: 'Quality Check'}] },
-    { category: 'Electrical', reasons: [{id: 'e1', code: 'elec-01', description: 'Sensor Failure'}, {id: 'e2', code: 'elec-02', description: 'Power Outage'}] },
-    { category: 'Other', reasons: [{id: 'ot1', code: 'oth-01', description: 'Scheduled Maintenance'}, {id: 'ot2', code: 'oth-02', description: 'Unknown'}] },
-];
-
-const mockDowntimeHistory: DowntimeEvent[] = [
-    { id: 'evt1', operator: 'John Smith', startDate: '2025-05-15', startTime: '08:23:15', endDate: '2025-05-15', endTime: '08:45:30', totalTime: '00:22:15', reason: 'Belt Breakage' },
-    { id: 'evt2', operator: 'John Smith', startDate: '2025-05-15', startTime: '10:12:45', endDate: '2025-05-15', endTime: '10:30:20', totalTime: '00:17:35', reason: 'Material Shortage' },
-    { id: 'evt3', operator: 'John Smith', startDate: '2025-05-15', startTime: '11:47:30', endDate: '2025-05-15', endTime: '11:52:50', totalTime: '00:05:20', reason: 'No Reason Provided' },
-];
-
-const mockProductionOrders: ProductionOrder[] = [
-    { id: 'po-001', name: 'PO-2025-001', product: 'Widget Assembly Type-A', quantity: 3000, dueDate: '2025-05-25' },
-    { id: 'po-002', name: 'PO-2025-002', product: 'Widget Assembly Type-B', quantity: 5200, dueDate: '2025-05-26' },
-    { id: 'po-003', name: 'PO-2025-003', product: 'Widget Assembly Type-C', quantity: 2500, dueDate: '2025-05-27' },
-];
-
-const mockProducts: Product[] = [
-    { id: 'prod-a', sku: 'SKU-12345', description: 'Widget Assembly Type-A' },
-    { id: 'prod-b', sku: 'SKU-67890', description: 'Widget Assembly Type-B' },
-];
-
-const mockProductionLines: ProductionLine[] = [
-    { id: 'line-1', name: 'ENVASE 520741-8', code: '520741-8', description: 'Linha de Envase Principal', isActive: true },
-    { id: 'line-2', name: 'ENVASE 520741-9', code: '520741-9', description: 'Linha de Envase Secundária', isActive: true },
-    { id: 'line-3', name: 'EMBALAGEM 520741-10', code: '520741-10', description: 'Linha de Embalagem', isActive: false },
-];
-
-const mockShifts: Shift[] = [
-    { id: 'shift-1', name: 'TURNO 1', startTime: '06:00', endTime: '14:00', isActive: false },
-    { id: 'shift-2', name: 'TURNO 2', startTime: '14:00', endTime: '22:00', isActive: true },
-    { id: 'shift-3', name: 'TURNO 3', startTime: '22:00', endTime: '06:00', isActive: false },
-];
-
 
 export const useProductionStore = create<ProductionState>((set, get) => ({
   machineStatus: MachineStatus.RUNNING,
@@ -94,11 +87,11 @@ export const useProductionStore = create<ProductionState>((set, get) => ({
   liveMetrics: {
     total: 0,
     good: 0,
-    rejects: 0, // Zerar rejeitos
+    rejects: 0,
     oee: 0,
     availability: 0,
     performance: 0,
-    quality: 100, // Qualidade sempre 100% (sem rejeitos)
+    quality: 100,
     productionOrderProgress: 0,
     possibleProduction: 0,
     timeInShift: 0,
@@ -107,21 +100,44 @@ export const useProductionStore = create<ProductionState>((set, get) => ({
     instantSpeed: 0,
   },
   currentJob: null,
-  downtimeHistory: mockDowntimeHistory,
-  downtimeReasons: mockDowntimeReasons,
-  productionOrders: mockProductionOrders,
-  products: mockProducts,
+  downtimeHistory: [],
+  downtimeReasons: [],
+  productionOrders: [],
+  products: [],
   currentDowntimeEventId: null,
-  productionLines: mockProductionLines,
-  shifts: mockShifts,
-  currentProductionLine: mockProductionLines[0], // ENVASE 520741-8 como padrão
-  currentShift: mockShifts[1], // TURNO 2 como padrão (ativo)
+  productionLines: [],
+  shifts: [],
+  currentProductionLine: null,
+  currentShift: null,
   isLoading: false,
   error: null,
   dashboardService: new DashboardService(),
   shiftService: new ShiftService(),
   wbmsService: new WbmsService(),
+  option7ApiService: new Option7ApiService(),
+  jobsService: new JobsService(),
   oeeHistory: null,
+  
+  // Novas propriedades WBMS
+  timeDistribution: {
+    produced: 0,
+    stopped: 0,
+    standby: 0,
+    setup: 0,
+    totalTime: '00:00:00'
+  },
+  topStopReasons: [],
+  productionStatus: {
+    status: 'PARADO',
+    icon: '⏸️',
+    color: '#f59e0b',
+    producingTime: '00:00:00',
+    producingPercentage: 0,
+    stoppedTime: '00:00:00'
+  },
+  availableProducts: [],
+  setupTypes: [],
+  showProductSelectionModal: false,
 
     setMachineStatus: (status: MachineStatus) => {
     set({ machineStatus: status });
@@ -133,7 +149,7 @@ export const useProductionStore = create<ProductionState>((set, get) => ({
             view: ViewState.STOP_REASON, 
             currentDowntimeEventId: newEventId,
             downtimeHistory: [
-                { id: newEventId, operator: 'John Smith', startDate: new Date().toISOString().split('T')[0], startTime: new Date().toLocaleTimeString(), endDate: null, endTime: null, totalTime: null, reason: 'Aguardando motivo...' },
+                { id: newEventId, operator: 'Operador', startDate: new Date().toISOString().split('T')[0], startTime: new Date().toLocaleTimeString(), endDate: null, endTime: null, totalTime: null, reason: 'Aguardando motivo...' },
                 ...get().downtimeHistory
             ]
         });
@@ -152,7 +168,6 @@ export const useProductionStore = create<ProductionState>((set, get) => ({
   setView: (view: ViewState) => set({ view }),
 
   initializeDashboard: async () => {
-    const { wbmsService } = get();
     console.log('🏪 Store: Iniciando dashboard...');
     set({ isLoading: true, error: null });
     
@@ -162,42 +177,23 @@ export const useProductionStore = create<ProductionState>((set, get) => ({
       await get().loadRealShifts();
       
       // Obter o turno atual
-      const { currentShift, currentProductionLine } = get();
+      const { currentShift } = get();
       console.log('🏪 Store: Turno atual:', currentShift?.name);
-      console.log('🏪 Store: Linha atual:', currentProductionLine?.name);
       
-      // Se temos turno, carregar dados em tempo real
+      // Se temos turno, carregar dados compostos do dashboard
       if (currentShift) {
-        console.log('🏪 Store: Carregando dados WBMS em tempo real...');
-        
-        // Usar equipamento padrão do WBMS
-        const equipmentId = await wbmsService.getDefaultEquipment();
-        
-        const liveData = await wbmsService.getLiveData(equipmentId);
-        const liveMetrics = wbmsService.convertToLiveMetrics(liveData);
-        const currentJob = wbmsService.convertToCurrentJob(liveData);
-        const productionLine = wbmsService.convertToProductionLine(liveData);
-        
-        console.log('🏪 Store: Dados WBMS recebidos, atualizando estado...', { liveData, liveMetrics });
-        
-        set({
-          liveMetrics,
-          currentJob: currentJob || get().currentJob, // Manter job atual se não há novo
-          currentProductionLine: productionLine || currentProductionLine, // Manter linha atual se não há nova
-          isLoading: false,
-        });
+        console.log('🏪 Store: Carregando dados compostos do dashboard...');
+        await get().fetchDashboardComposite();
       } else {
-        console.log('🏪 Store: Usando dados mockados (turno não definido)');
+        console.log('🏪 Store: Turno não definido');
         set({ isLoading: false });
       }
       
       console.log('🏪 Store: Dashboard inicializado com sucesso!');
     } catch (error) {
-      console.error('🏪 Store: Erro ao inicializar dashboard:', error);
-      set({ 
-        error: error instanceof Error ? error.message : 'Erro desconhecido',
-        isLoading: false 
-      });
+      console.error('🏪 Store: Erro ao inicializar dashboard (tratado silenciosamente):', error);
+      // Não definir erro no estado - tratamento silencioso
+      set({ isLoading: false });
     }
   },
 
@@ -250,14 +246,27 @@ export const useProductionStore = create<ProductionState>((set, get) => ({
           view: ViewState.STOP_REASON, 
           currentDowntimeEventId: newEventId,
           downtimeHistory: [
-            { id: newEventId, operator: 'John Smith', startDate: new Date().toISOString().split('T')[0], startTime: new Date().toLocaleTimeString(), endDate: null, endTime: null, totalTime: null, reason: 'Aguardando motivo...' },
+            { 
+              id: newEventId, 
+              operator: 'Operador', 
+              startDate: new Date().toISOString().split('T')[0], 
+              startTime: new Date().toLocaleTimeString(), 
+              endDate: null, 
+              endTime: null, 
+              totalTime: null, 
+              reason: 'Aguardando motivo...' 
+            },
             ...get().downtimeHistory
           ]
         });
+      } else if (machineStatus === 'DOWN' && get().currentDowntimeEventId) {
+        console.log('🔄 Store: Máquina ainda parada, evento já registrado:', get().currentDowntimeEventId);
+      } else if (machineStatus === 'DOWN' && get().view === ViewState.STOP_REASON) {
+        console.log('🔄 Store: Máquina parada, já na tela de parada');
       }
     } catch (error) {
-      console.error('🔄 Store: Erro ao buscar dados em tempo real:', error);
-      set({ error: error instanceof Error ? error.message : 'Erro ao buscar dados' });
+      console.error('🔄 Store: Erro ao buscar dados em tempo real (tratado silenciosamente):', error);
+      // Não definir erro no estado - tratamento silencioso
     }
   },
 
@@ -269,21 +278,19 @@ export const useProductionStore = create<ProductionState>((set, get) => ({
       await dashboardService.registerEvent(currentShift, eventType);
       set({ isLoading: false });
     } catch (error) {
-      console.error('Erro ao registrar evento:', error);
-      set({ 
-        error: error instanceof Error ? error.message : 'Erro ao registrar evento',
-        isLoading: false 
-      });
+      console.error('Erro ao registrar evento (tratado silenciosamente):', error);
+      // Não definir erro no estado - tratamento silencioso
+      set({ isLoading: false });
     }
   },
 
-  registerStopReason: async (reason: string) => {
+  registerStopReason: async (reason: string, reasonId?: string) => {
     const { dashboardService, currentShift } = get();
     set({ isLoading: true, error: null });
     
     try {
-      // Registrar o motivo da parada
-      await dashboardService.registerEvent(currentShift, 'DOWN');
+      // Registrar o motivo da parada usando método específico
+      await dashboardService.registerStopEvent(currentShift, reason, reasonId);
       
       set(state => {
         const previousView = state.previousView || ViewState.DASHBOARD;
@@ -291,7 +298,7 @@ export const useProductionStore = create<ProductionState>((set, get) => ({
           event.id === state.currentDowntimeEventId 
             ? { 
                 ...event, 
-                reason,
+                reason: reasonId ? `${reason} (ID: ${reasonId})` : reason,
                 endDate: new Date().toISOString().split('T')[0],
                 endTime: new Date().toLocaleTimeString(),
                 totalTime: '0' // Será calculado pelo backend
@@ -299,23 +306,27 @@ export const useProductionStore = create<ProductionState>((set, get) => ({
             : event
         );
         
-        console.log('✅ Motivo da parada registrado:', { reason, previousView });
+        console.log('✅ Motivo da parada registrado:', { 
+          reason, 
+          reasonId, 
+          previousView,
+          eventId: state.currentDowntimeEventId 
+        });
         
         return {
           downtimeHistory: updatedHistory,
-          currentDowntimeEventId: null,
-          machineStatus: MachineStatus.RUNNING,
-          view: previousView,
-          previousView: null,
+          currentDowntimeEventId: null, // 🔑 CRÍTICO: Limpa o ID do evento atual
+          machineStatus: MachineStatus.RUNNING, // 🔑 CRÍTICO: Define máquina como rodando
+          view: previousView, // 🔑 CRÍTICO: Retorna para view anterior
+          previousView: null, // 🔑 CRÍTICO: Limpa view anterior
           isLoading: false,
         };
       });
     } catch (error) {
-      console.error('Erro ao registrar motivo da parada:', error);
-      set({ 
-        error: error instanceof Error ? error.message : 'Erro ao registrar motivo',
-        isLoading: false 
-      });
+      console.error('❌ Erro ao registrar motivo da parada (tratado silenciosamente):', error);
+      // Não definir erro no estado - tratamento silencioso
+      set({ isLoading: false });
+      // Não fazer re-throw para evitar propagação de erro
     }
   },
 
@@ -346,61 +357,8 @@ export const useProductionStore = create<ProductionState>((set, get) => ({
 
   setCurrentProductionLine: (line: ProductionLine) => {
     set({ currentProductionLine: line });
-    // Simular atualização dos dados baseado na linha de produção
-    // Em um sistema real, isso dispararia uma API call
-    const lineBasedData = {
-      'line-1': { // ENVASE 520741-8
-        total: 240,
-        good: 240, // Todas as peças são boas (sem rejeitos)
-        rejects: 0, // Zerar rejeitos
-        oee: 80.1,
-        currentJob: {
-          orderId: '5207418',
-          orderQuantity: 1241,
-          productId: '240042176',
-          productName: 'GUARANA 500ml',
-        }
-      },
-      'line-2': { // ENVASE 520741-9
-        total: 180,
-        good: 180, // Todas as peças são boas (sem rejeitos)
-        rejects: 0, // Zerar rejeitos
-        oee: 75.3,
-        currentJob: {
-          orderId: '5207419',
-          orderQuantity: 980,
-          productId: '240042177',
-          productName: 'COCA-COLA 350ml',
-        }
-      },
-      'line-3': { // EMBALAGEM 520741-10
-        total: 320,
-        good: 320, // Todas as peças são boas (sem rejeitos)
-        rejects: 0, // Zerar rejeitos
-        oee: 85.7,
-        currentJob: {
-          orderId: '5207420',
-          orderQuantity: 1500,
-          productId: '240042178',
-          productName: 'ÁGUA MINERAL 500ml',
-        }
-      }
-    };
-    
-    const data = lineBasedData[line.id as keyof typeof lineBasedData];
-    if (data) {
-      set(state => ({
-        liveMetrics: {
-          ...state.liveMetrics,
-          total: data.total,
-          good: data.good,
-          rejects: 0, // Zerar rejeitos
-          oee: data.oee,
-          productionOrderProgress: data.good,
-        },
-        currentJob: data.currentJob
-      }));
-    }
+    // Em um sistema real, isso dispararia uma API call para buscar dados da linha
+    console.log('Linha de produção selecionada:', line.line);
   },
 
   setCurrentShift: (shift: Shift) => {
@@ -420,47 +378,13 @@ export const useProductionStore = create<ProductionState>((set, get) => ({
       console.log('🔄 Store: Dados atualizados para o turno:', shift.name);
     }).catch(error => {
       console.error('❌ Store: Erro ao atualizar dados do turno:', error);
-      // Em caso de erro, usar dados simulados como fallback
-      const shiftBasedData = {
-        'shift-1': { // TURNO 1
-          timeInShift: 6.5,
-          totalShiftTime: 8.0,
-          avgSpeed: 25.2,
-          instantSpeed: 26.8,
-        },
-        'shift-2': { // TURNO 2
-          timeInShift: 2.3,
-          totalShiftTime: 7.8,
-          avgSpeed: 27.6,
-          instantSpeed: 29.3,
-        },
-        'shift-3': { // TURNO 3
-          timeInShift: 4.1,
-          totalShiftTime: 8.0,
-          avgSpeed: 23.8,
-          instantSpeed: 24.5,
-        }
-      };
-      
-      const data = shiftBasedData[shift.id as keyof typeof shiftBasedData];
-      if (data) {
-        set(state => ({
-          liveMetrics: {
-            ...state.liveMetrics,
-            timeInShift: data.timeInShift,
-            totalShiftTime: data.totalShiftTime,
-            avgSpeed: data.avgSpeed,
-            instantSpeed: data.instantSpeed,
-          }
-        }));
-      }
     });
   },
 
-  createProductionLine: (lineData: Omit<ProductionLine, 'id'>) => {
+  createProductionLine: (lineData: Omit<ProductionLine, 'client_line_key'>) => {
     const newLine: ProductionLine = {
       ...lineData,
-      id: `line-${Date.now()}`,
+      client_line_key: `line-${Date.now()}`,
     };
     set(state => ({
       productionLines: [...state.productionLines, newLine],
@@ -487,9 +411,9 @@ export const useProductionStore = create<ProductionState>((set, get) => ({
     set({ isLoading: true, error: null });
     
     try {
-      // Buscar todos os apontamentos (turnos) - sempre há pelo menos um
-      const apontamentos = await shiftService.getApontamentos(1, 10);
-      const realShifts = shiftService.convertToShifts(apontamentos);
+      // Buscar todos os turnos - sempre há pelo menos um
+      const shifts = await shiftService.getShifts(1, 10);
+      const realShifts = shiftService.convertToShifts(shifts);
       
       console.log('✅ Store: Turnos carregados:', realShifts);
       
@@ -513,11 +437,9 @@ export const useProductionStore = create<ProductionState>((set, get) => ({
       
       return true; // Sempre há um turno
     } catch (error) {
-      console.error('❌ Store: Erro ao carregar turnos:', error);
-      set({ 
-        error: error instanceof Error ? error.message : 'Erro ao carregar turnos',
-        isLoading: false 
-      });
+      console.error('❌ Store: Erro ao carregar turnos (tratado silenciosamente):', error);
+      // Não definir erro no estado - tratamento silencioso
+      set({ isLoading: false });
       return false;
     }
   },
@@ -532,9 +454,453 @@ export const useProductionStore = create<ProductionState>((set, get) => ({
       console.log('✅ Store: Histórico OEE carregado:', historyData);
     } catch (error) {
       console.error('❌ Store: Erro ao buscar histórico OEE:', error);
-      // Em caso de erro, usar dados mockados como fallback
-      const mockData = dashboardService.getMockOeeHistory(period);
-      set({ oeeHistory: mockData });
+      // Em caso de erro, definir dados vazios
+      set({ oeeHistory: null });
+    }
+  },
+
+  // Novos métodos WBMS
+  fetchTimeDistribution: async () => {
+    const { dashboardService, currentShift } = get();
+    console.log('📊 Store: Buscando distribuição de tempo...');
+    try {
+      const timeDistributionData = await dashboardService.getTimeDistribution(currentShift);
+      
+      // Converter segundos para formato hh:mm:ss
+      const formatTime = (seconds: number) => {
+        const hours = Math.floor(seconds / 3600);
+        const minutes = Math.floor((seconds % 3600) / 60);
+        const secs = seconds % 60;
+        return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+      };
+
+      set({ 
+        timeDistribution: {
+          produced: timeDistributionData.produced,
+          stopped: timeDistributionData.stopped,
+          standby: timeDistributionData.standby,
+          setup: timeDistributionData.setup,
+          totalTime: formatTime(timeDistributionData.totalTime)
+        }
+      });
+      console.log('✅ Store: Distribuição de tempo carregada');
+    } catch (error) {
+      console.error('❌ Store: Erro ao buscar distribuição de tempo:', error);
+      // Manter dados vazios em caso de erro
+    }
+  },
+
+  fetchTopStopReasons: async () => {
+    const { dashboardService, currentShift } = get();
+    console.log('📊 Store: Buscando principais paradas...');
+    try {
+      const stopReasonsData = await dashboardService.getTopStopReasons(currentShift);
+      
+      // Converter segundos para formato hh:mm:ss
+      const formatTime = (seconds: number) => {
+        const hours = Math.floor(seconds / 3600);
+        const minutes = Math.floor((seconds % 3600) / 60);
+        const secs = seconds % 60;
+        return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+      };
+
+      const convertedStopReasons = stopReasonsData.map(reason => ({
+        id: reason.id.toString(),
+        code: reason.code,
+        description: reason.description,
+        category: reason.category,
+        totalTime: formatTime(reason.totalTime),
+        occurrences: reason.occurrences
+      }));
+
+      set({ topStopReasons: convertedStopReasons });
+      console.log('✅ Store: Principais paradas carregadas');
+    } catch (error) {
+      console.error('❌ Store: Erro ao buscar principais paradas:', error);
+      set({ topStopReasons: [] });
+    }
+  },
+
+  // Novo método para buscar timeline de produção
+  fetchProductionTimeline: async () => {
+    const { dashboardService, currentShift } = get();
+    console.log('📊 Store: Buscando timeline de produção...');
+    try {
+      const timelineData = await dashboardService.getProductionTimeline(currentShift);
+      // Por enquanto, apenas logar os dados - implementar no componente quando necessário
+      console.log('✅ Store: Timeline de produção carregada:', timelineData);
+    } catch (error) {
+      console.error('❌ Store: Erro ao buscar timeline de produção:', error);
+    }
+  },
+
+  // Novo método para buscar histórico de paradas
+  fetchDowntimeHistory: async () => {
+    const { dashboardService, currentShift } = get();
+    console.log('📊 Store: Buscando histórico de paradas...');
+    try {
+      const downtimeData = await dashboardService.getDowntimeHistory(currentShift);
+      // Converter para o formato esperado pelo frontend
+      const convertedDowntimeHistory = downtimeData.map(event => ({
+        id: event.id.toString(),
+        operator: 'Operador', // Valor padrão
+        startDate: new Date(event.startTime).toISOString().split('T')[0],
+        startTime: new Date(event.startTime).toLocaleTimeString(),
+        endDate: event.endTime ? new Date(event.endTime).toISOString().split('T')[0] : null,
+        endTime: event.endTime ? new Date(event.endTime).toLocaleTimeString() : null,
+        totalTime: event.duration ? Math.floor(event.duration / 60).toString() : null, // Converter para minutos
+        reason: event.reason
+      }));
+
+      set({ downtimeHistory: convertedDowntimeHistory });
+      console.log('✅ Store: Histórico de paradas carregado');
+    } catch (error) {
+      console.error('❌ Store: Erro ao buscar histórico de paradas:', error);
+    }
+  },
+
+  // Novo método para buscar dados compostos do dashboard
+  fetchDashboardComposite: async () => {
+    const { dashboardService, currentShift } = get();
+    console.log('📊 Store: Buscando dados compostos do dashboard...');
+    set({ isLoading: true, error: null });
+    
+    try {
+      const compositeData = await dashboardService.getDashboardComposite(currentShift);
+      
+      // TODO: Converter dados para o formato do store quando API estiver estável
+      set({
+        oeeHistory: compositeData.oeeHistory,
+        timeDistribution: {
+          produced: compositeData.timeDistribution.produced,
+          stopped: compositeData.timeDistribution.stopped,
+          standby: compositeData.timeDistribution.standby,
+          setup: compositeData.timeDistribution.setup,
+          totalTime: get().formatTime(compositeData.timeDistribution.totalTime)
+        },
+        topStopReasons: compositeData.topStopReasons.map(reason => ({
+          id: reason.id.toString(),
+          code: reason.code,
+          description: reason.description,
+          category: reason.category,
+          totalTime: get().formatTime(reason.totalTime),
+          occurrences: reason.occurrences
+        })),
+        productionStatus: compositeData.productionStatus,
+        isLoading: false
+      });
+
+      console.log('✅ Store: Dados compostos do dashboard carregados');
+    } catch (error) {
+      console.error('❌ Store: Erro ao buscar dados compostos do dashboard (tratado silenciosamente):', error);
+      // Não definir erro no estado - tratamento silencioso
+      set({ isLoading: false });
+    }
+  },
+
+  // Função auxiliar para formatar tempo
+  formatTime: (seconds: number) => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  },
+
+  // Implementações dos novos métodos para API real
+  loadRealProductionOrders: async () => {
+    const { jobsService } = get();
+    set({ isLoading: true, error: null });
+    
+    try {
+      const jobs = await jobsService.getCurrentShiftJobs();
+      const productionOrders: ProductionOrder[] = [];
+      
+      for (const job of jobs) {
+        const product = await jobsService.getProductByPartId(job.part_id);
+        const order = jobsService.convertJobToProductionOrder(job, product || undefined);
+        productionOrders.push(order);
+      }
+      
+      set({ productionOrders, isLoading: false });
+      console.log('📦 Store: Ordens de produção carregadas:', productionOrders);
+    } catch (error) {
+      console.error('❌ Store: Erro ao carregar ordens de produção:', error);
+      set({ 
+        error: error instanceof Error ? error.message : 'Erro ao carregar ordens de produção',
+        isLoading: false 
+      });
+    }
+  },
+  
+  loadCurrentShiftJobs: async () => {
+    const { jobsService } = get();
+    set({ isLoading: true, error: null });
+    
+    try {
+      const jobs = await jobsService.getCurrentShiftJobs();
+      console.log('🔄 Store: Jobs do turno atual carregados:', jobs);
+      
+      // Converter para ProductionOrders
+      const productionOrders: ProductionOrder[] = [];
+      for (const job of jobs) {
+        const product = await jobsService.getProductByPartId(job.part_id);
+        const order = jobsService.convertJobToProductionOrder(job, product || undefined);
+        productionOrders.push(order);
+      }
+      
+      set({ productionOrders, isLoading: false });
+    } catch (error) {
+      console.error('❌ Store: Erro ao carregar jobs do turno:', error);
+      set({ 
+        error: error instanceof Error ? error.message : 'Erro ao carregar jobs do turno',
+        isLoading: false 
+      });
+    }
+  },
+  
+  loadJobProducts: async (jobId: string) => {
+    const { jobsService } = get();
+    set({ isLoading: true, error: null });
+    
+    try {
+      // Buscar job específico
+      const jobs = await jobsService.getCurrentShiftJobs();
+      const job = jobs.find(j => j.job_number_key.toString() === jobId);
+      
+      if (job) {
+        const products = await jobsService.getProductsForJob(job);
+        console.log('🎯 Store: Produtos do job carregados:', products);
+        
+        // Converter produtos para formato da store
+        const convertedProducts = products.map(p => ({
+          id: p.product_key,
+          name: p.product,
+          product_key: p.product_key,
+          product: p.product,
+          internal_code: p.internal_code,
+          units_per_package: p.units_per_package,
+          isSelected: false,
+          code: p.internal_code,
+          description: p.product,
+          sku: p.internal_code
+        }));
+        
+        set({ products: convertedProducts, isLoading: false });
+      } else {
+        throw new Error('Job não encontrado');
+      }
+    } catch (error) {
+      console.error('❌ Store: Erro ao carregar produtos do job:', error);
+      set({ 
+        error: error instanceof Error ? error.message : 'Erro ao carregar produtos do job',
+        isLoading: false 
+      });
+    }
+  },
+
+  updateProductionStatus: () => {
+    const { machineStatus, liveMetrics } = get();
+    
+    let status: ProductionStatus['status'] = 'PRODUZINDO';
+    let icon = '▶️';
+    let color = '#22c55e';
+    
+    switch (machineStatus) {
+      case MachineStatus.DOWN:
+        status = 'PARADO';
+        icon = '⏸️';
+        color = '#ef4444';
+        break;
+      case MachineStatus.SETUP:
+        status = 'SETUP';
+        icon = '🔧';
+        color = '#3b82f6';
+        break;
+      case MachineStatus.STANDBY:
+        status = 'STANDBY';
+        icon = '⏸️';
+        color = '#f59e0b';
+        break;
+      default:
+        status = 'PRODUZINDO';
+        icon = '▶️';
+        color = '#22c55e';
+    }
+    
+    // Calcular tempos baseados nos dados atuais
+    const producingTime = '00:00:00'; // Em implementação real viria dos dados
+    const producingPercentage = 0; // Em implementação real seria calculado
+    const stoppedTime = '00:00:00'; // Em implementação real viria dos dados
+    
+    set({
+      productionStatus: {
+        status,
+        icon,
+        color,
+        producingTime,
+        producingPercentage,
+        stoppedTime
+      }
+    });
+  },
+
+  selectProduct: (productId: string) => {
+    set(state => ({
+      availableProducts: state.availableProducts.map(product => ({
+        ...product,
+        isSelected: product.id === productId
+      }))
+    }));
+  },
+
+  // Carregar produtos da API e converter para ProductSelection
+  loadAvailableProducts: async () => {
+    try {
+      console.log('🔄 Store: Carregando produtos da API...');
+      
+      // Usar o serviço de produção para buscar produtos
+      const productionService = await import('../services/productionService');
+      const products = await productionService.default.getAvailableProducts();
+      
+      // Converter para ProductSelection
+      const productSelections: ProductSelection[] = products.map((product: Product) => ({
+        id: product.id,
+        name: product.name,
+        product_key: product.product_key,
+        product: product.product,
+        internal_code: product.internal_code,
+        units_per_package: product.units_per_package,
+        isSelected: false,
+        code: product.code,
+        description: product.description
+      }));
+      
+      set({ availableProducts: productSelections });
+      console.log('✅ Store: Produtos carregados:', productSelections);
+    } catch (error) {
+      console.error('❌ Store: Erro ao carregar produtos:', error);
+      // Não definir erro no estado - tratamento silencioso
+    }
+  },
+
+  startProductSetup: (setupTypeId: string) => {
+    const setupType = get().setupTypes.find(st => st.id === setupTypeId);
+    if (setupType) {
+      console.log('🔧 Store: Iniciando setup:', setupType.name);
+      set({ 
+        machineStatus: MachineStatus.SETUP,
+        view: ViewState.SETUP,
+        showProductSelectionModal: false
+      });
+    }
+  },
+
+  setShowProductSelectionModal: (show: boolean) => {
+    set({ showProductSelectionModal: show });
+  },
+
+  fetchStopReasons: async () => {
+    const { option7ApiService } = get();
+    console.log('🛑 Store: Buscando motivos de parada da API...');
+    set({ isLoading: true, error: null });
+    
+    try {
+      const eventReasons = await option7ApiService.getEventReasons('stop');
+      
+      // Converter para o formato esperado pelo frontend
+      const categories = new Map<string, DowntimeReasonCategory>();
+      
+      eventReasons.forEach((reason: any) => {
+        // Extrair categoria baseada no prefixo do motivo
+        let category = 'Outros';
+        
+        if (reason.motivo.startsWith('Man.') || reason.motivo.startsWith('Manut.')) {
+          category = 'Manutenção';
+        } else if (reason.motivo.startsWith('Ajuste') || reason.motivo.includes('Ajuste')) {
+          category = 'Ajustes';
+        } else if (reason.motivo.startsWith('Falha') || reason.motivo.includes('Falha')) {
+          category = 'Falhas';
+        } else if (reason.motivo.startsWith('Parada') || reason.motivo.includes('Parada')) {
+          category = 'Paradas';
+        } else if (reason.motivo.startsWith('Falta') || reason.motivo.includes('Falta')) {
+          category = 'Falta de Material';
+        } else if (reason.motivo.startsWith('Troca') || reason.motivo.includes('Troca')) {
+          category = 'Trocas';
+        } else if (reason.motivo.startsWith('Limpeza') || reason.motivo.includes('Limpeza')) {
+          category = 'Limpeza';
+        } else if (reason.motivo.startsWith('Aguardando') || reason.motivo.includes('Aguardando')) {
+          category = 'Aguardando';
+        } else if (reason.motivo.startsWith('M-')) {
+          category = 'Manutenção';
+        } else if (reason.motivo.includes('Producao') || reason.motivo.includes('Produção')) {
+          category = 'Produção';
+        } else if (reason.motivo.includes('Queda') || reason.motivo.includes('Energia')) {
+          category = 'Energia';
+        } else if (reason.motivo.includes('Intervalo') || reason.motivo.includes('Operacional')) {
+          category = 'Operacional';
+        } else if (reason.motivo.includes('Retrabalho') || reason.motivo.includes('Retirada')) {
+          category = 'Retrabalho';
+        } else if (reason.motivo.includes('Correção') || reason.motivo.includes('Raspagem')) {
+          category = 'Correções';
+        } else if (reason.motivo.includes('TESTES') || reason.motivo.includes('Teste')) {
+          category = 'Testes';
+        } else if (reason.motivo.includes('ESGOTAMENTO') || reason.motivo.includes('Matéria Prima')) {
+          category = 'Material';
+        }
+        
+        if (!categories.has(category)) {
+          categories.set(category, {
+            category,
+            reasons: []
+          });
+        }
+        
+        categories.get(category)!.reasons.push({
+          id: reason.descricao_parada_key.toString(),
+          code: reason.descricao_parada_key.toString(),
+          description: reason.motivo
+        });
+      });
+      
+      // Ordenar categorias por relevância (mais importantes primeiro)
+      const categoryOrder = [
+        'Manutenção',
+        'Falhas', 
+        'Paradas',
+        'Ajustes',
+        'Falta de Material',
+        'Trocas',
+        'Aguardando',
+        'Limpeza',
+        'Produção',
+        'Energia',
+        'Operacional',
+        'Retrabalho',
+        'Correções',
+        'Testes',
+        'Material',
+        'Outros'
+      ];
+      
+      const sortedCategories = Array.from(categories.values()).sort((a, b) => {
+        const aIndex = categoryOrder.indexOf(a.category);
+        const bIndex = categoryOrder.indexOf(b.category);
+        return aIndex - bIndex;
+      });
+      
+      const downtimeReasons = sortedCategories;
+      
+      set({ 
+        downtimeReasons,
+        isLoading: false,
+        error: null
+      });
+      
+      console.log('✅ Store: Motivos de parada carregados:', downtimeReasons);
+    } catch (error) {
+      console.error('❌ Store: Erro ao buscar motivos de parada (tratado silenciosamente):', error);
+      // Não definir erro no estado - tratamento silencioso
+      set({ isLoading: false });
     }
   },
 }));

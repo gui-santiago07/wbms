@@ -1,36 +1,17 @@
 import ApiClient from './api';
 import { Shift } from '../types';
 
-// Interfaces para as respostas da API de turnos (baseado na documentação)
-interface ApontamentoResponse {
-  id: number;
-  shift_id: string;
-  line_id: number;
-  line_name: string;
-  start_time: string;
-  end_time: string | null;
-  status: 'active' | 'finished' | 'paused';
-  total_count: number;
-  good_count: number;
-  reject_count: number;
-  oee: number;
-  availability: number;
-  performance: number;
-  quality: number;
-  current_product?: {
-    id: number;
-    name: string;
-    sku: string;
-  };
-  current_job?: {
-    id: number;
-    job_id: string;
-    quantity: number;
-  };
+// Interfaces para as respostas da API de turnos
+interface ShiftResponse {
+  id: string;
+  name: string;
+  startTime: string;
+  endTime: string;
+  isActive: boolean;
 }
 
-interface ApontamentoListResponse {
-  data: ApontamentoResponse[];
+interface ShiftListResponse {
+  data: ShiftResponse[];
   current_page: number;
   per_page: number;
   total: number;
@@ -42,27 +23,86 @@ class ShiftService extends ApiClient {
     super();
   }
 
-  // Buscar lista de apontamentos (turnos) - endpoint correto da documentação
-  async getApontamentos(page: number = 1, itemsPerPage: number = 10): Promise<ApontamentoResponse[]> {
-    console.log('🔍 Buscando apontamentos (turnos)...', { page, itemsPerPage });
+  // Buscar lista de turnos - usando endpoint correto da API Option7
+  async getShifts(page: number = 1, itemsPerPage: number = 10): Promise<ShiftResponse[]> {
+    console.log('🔍 Buscando turnos...', { page, itemsPerPage });
     
+    // 🚫 TEMPORARIAMENTE DESATIVADO - Rota /timesheets com erro
+    console.log('⚠️ Rota /timesheets temporariamente desativada - retornando dados mock');
+    
+    // Retornar dados mock para desenvolvimento
+    const mockShifts: ShiftResponse[] = [
+      {
+        id: '1',
+        name: 'TURNO 1',
+        startTime: '08:00',
+        endTime: '16:00',
+        isActive: true
+      },
+      {
+        id: '2', 
+        name: 'TURNO 2',
+        startTime: '16:00',
+        endTime: '00:00',
+        isActive: false
+      },
+      {
+        id: '3',
+        name: 'TURNO 3',
+        startTime: '00:00',
+        endTime: '08:00',
+        isActive: false
+      }
+    ];
+    
+    console.log('✅ Turnos mock carregados:', mockShifts);
+    return mockShifts;
+    
+    /* CÓDIGO ORIGINAL COMENTADO TEMPORARIAMENTE
     try {
-      const result = await this.get<ApontamentoListResponse>(`/apontamento-lista?page=${page}&itemsPerPage=${itemsPerPage}`);
-      console.log('✅ Apontamentos carregados:', result.data);
+      // ✅ Usar endpoint correto da API Option7
+      const result = await this.get<ShiftListResponse>(`/timesheets?page=${page}&itemsPerPage=${itemsPerPage}`);
+      console.log('✅ Turnos carregados:', result.data);
       return result.data;
     } catch (error) {
-      console.error('❌ Erro ao buscar apontamentos:', error);
-      throw new Error(`Falha ao carregar apontamentos: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+      console.error('❌ Erro ao buscar turnos:', error);
+      
+      // Log detalhado para debug
+      if (error instanceof Response) {
+        console.error('📊 Status:', error.status);
+        console.error('📋 Status Text:', error.statusText);
+        console.error('📄 Headers:', Object.fromEntries(error.headers.entries()));
+        
+        // Tentar ler o corpo da resposta para debug
+        try {
+          const responseText = await error.text();
+          console.error('📄 Response Body (primeiros 500 chars):', responseText.substring(0, 500));
+          
+          // Verificar se é HTML
+          if (responseText.includes('<!DOCTYPE') || responseText.includes('<html')) {
+            console.error('🚨 Resposta é HTML, não JSON! Possíveis causas:');
+            console.error('   - Endpoint não existe (404)');
+            console.error('   - Problema de autenticação (redirecionamento)');
+            console.error('   - Servidor não está rodando');
+            console.error('   - URL incorreta');
+          }
+        } catch (textError) {
+          console.error('📄 Erro ao ler response body:', textError);
+        }
+      }
+      
+      throw new Error(`Falha ao carregar turnos: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
     }
+    */
   }
 
-  // Buscar turnos ativos (status = 'active')
-  async getActiveShifts(): Promise<ApontamentoResponse[]> {
+  // Buscar turnos ativos
+  async getActiveShifts(): Promise<ShiftResponse[]> {
     console.log('🔍 Buscando turnos ativos...');
     
     try {
-      const allApontamentos = await this.getApontamentos(1, 50); // Buscar mais para filtrar
-      const activeShifts = allApontamentos.filter(ap => ap.status === 'active');
+      const allShifts = await this.getShifts(1, 50); // Buscar mais para filtrar
+      const activeShifts = allShifts.filter(shift => shift.isActive);
       console.log('✅ Turnos ativos encontrados:', activeShifts.length);
       return activeShifts;
     } catch (error) {
@@ -72,11 +112,11 @@ class ShiftService extends ApiClient {
   }
 
   // Buscar turno específico por ID
-  async getShiftById(shiftId: number): Promise<ApontamentoResponse> {
+  async getShiftById(shiftId: string): Promise<ShiftResponse> {
     console.log('🔍 Buscando turno específico:', shiftId);
     
     try {
-      const result = await this.get<ApontamentoResponse>(`/apontamento-lista/${shiftId}`);
+      const result = await this.get<ShiftResponse>(`/timesheets/${shiftId}`);
       console.log('✅ Turno específico carregado:', result);
       return result;
     } catch (error) {
@@ -97,7 +137,7 @@ class ShiftService extends ApiClient {
   }
 
   // Obter primeiro turno ativo
-  async getFirstActiveShift(): Promise<ApontamentoResponse | null> {
+  async getFirstActiveShift(): Promise<ShiftResponse | null> {
     try {
       const activeShifts = await this.getActiveShifts();
       return activeShifts.length > 0 ? activeShifts[0] : null;
@@ -107,39 +147,20 @@ class ShiftService extends ApiClient {
     }
   }
 
-  // Converter ApontamentoResponse para Shift (formato da aplicação)
-  convertToShift(apontamento: ApontamentoResponse): Shift {
+  // Converter ShiftResponse para Shift (formato da aplicação)
+  convertToShift(shiftData: ShiftResponse): Shift {
     return {
-      id: `shift-${apontamento.id}`,
-      name: apontamento.shift_id,
-      startTime: new Date(apontamento.start_time).toLocaleTimeString('pt-BR', { 
-        hour: '2-digit', 
-        minute: '2-digit' 
-      }),
-      endTime: apontamento.end_time 
-        ? new Date(apontamento.end_time).toLocaleTimeString('pt-BR', { 
-            hour: '2-digit', 
-            minute: '2-digit' 
-          })
-        : '--:--',
-      isActive: apontamento.status === 'active',
-      // Dados adicionais do turno real
-      shiftNumberKey: apontamento.id,
-      assetId: apontamento.line_name,
-      partId: apontamento.current_product?.sku || '',
-      totalCount: apontamento.total_count,
-      goodCount: apontamento.good_count,
-      rejectCount: 0, // Zerar rejeitos
-      oee: apontamento.oee,
-      availability: apontamento.availability,
-      performance: apontamento.performance,
-      quality: apontamento.quality,
+      id: shiftData.id,
+      name: shiftData.name,
+      startTime: shiftData.startTime,
+      endTime: shiftData.endTime,
+      isActive: shiftData.isActive,
     };
   }
 
-  // Converter lista de ApontamentoResponse para Shift[]
-  convertToShifts(apontamentos: ApontamentoResponse[]): Shift[] {
-    return apontamentos.map(apontamento => this.convertToShift(apontamento));
+  // Converter lista de ShiftResponse para Shift[]
+  convertToShifts(shiftsData: ShiftResponse[]): Shift[] {
+    return shiftsData.map(shift => this.convertToShift(shift));
   }
 }
 

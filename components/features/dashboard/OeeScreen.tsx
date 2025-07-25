@@ -8,8 +8,13 @@ import StopReasonModal from '../modals/StopReasonModal';
 import SetupModal from '../modals/SetupModal';
 import ProductionLineModal from '../modals/ProductionLineModal';
 import ShiftModal from '../modals/ShiftModal';
+import ProductSelectionModal from '../modals/ProductSelectionModal';
 import LoadingSpinner from '../../ui/LoadingSpinner';
 import ErrorMessage from '../../ui/ErrorMessage';
+import TimeDistributionChart from './TimeDistributionChart';
+import StopReasonsList from './StopReasonsList';
+import ProductionTimeline from './ProductionTimeline';
+
 import { useProductionStore } from '../../../store/useProductionStore';
 import { ViewState } from '../../../types';
 import { useLiveDataPolling } from '../../../hooks/useLiveDataPolling';
@@ -75,12 +80,12 @@ const OeeTrendChart: React.FC = () => {
     fetchOeeHistory(selectedPeriod);
   }, [selectedPeriod, fetchOeeHistory, currentShift]);
 
-  // Usar dados do store ou dados padrão se não houver dados
+  // Usar dados do store ou dados vazios se não houver dados
   const currentData = oeeHistory || {
-    points: [{ x: 10, y: 80 }, { x: 190, y: 85 }],
-    timeLabels: ['Início', 'Agora'],
-    trend: '+5.0%',
-    trendColor: 'text-green-400'
+    points: [],
+    timeLabels: [],
+    trend: '0.0%',
+    trendColor: 'text-gray-400'
   };
 
   const pathData = currentData.points.map((point, index) => 
@@ -154,7 +159,7 @@ const OeeTrendChart: React.FC = () => {
 };
 
 const OeeView: React.FC = () => {
-  const { liveMetrics, currentJob, currentShift } = useProductionStore();
+  const { liveMetrics, currentJob, currentShift, setShowProductSelectionModal } = useProductionStore();
   const goodPartsPercent = liveMetrics.total > 0 ? (liveMetrics.good / liveMetrics.total) * 100 : 100; // Sempre 100% (sem rejeitos)
 
   // Calcular progresso da ordem de produção
@@ -169,13 +174,13 @@ const OeeView: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4 lg:gap-6">
         {/* Seção de Produção - 2 colunas */}
         <div className="lg:col-span-2 space-y-6">
           {/* Métricas de Produção */}
-          <Card className="p-6">
+          <Card className="p-4 md:p-6">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+              <h2 className="text-base md:text-lg font-semibold text-white flex items-center gap-2">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M3 3v16a2 2 0 0 0 2 2h16"/>
                   <path d="M7 11h8"/>
@@ -184,12 +189,20 @@ const OeeView: React.FC = () => {
                 </svg>
                 Production
               </h2>
-              <div className="text-sm text-muted">
-                {currentShift?.name || 'Turno Ativo'}
+              <div className="flex items-center gap-2">
+                <div className="text-sm text-muted">
+                  {currentShift?.name || 'Turno Ativo'}
+                </div>
+                <button
+                  onClick={() => setShowProductSelectionModal(true)}
+                  className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                >
+                  Selecionar Produto
+                </button>
               </div>
             </div>
             
-            <div className="grid grid-cols-3 gap-4 mb-6">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4 mb-4 md:mb-6">
               <div className="bg-surface p-4 rounded-lg">
                 <div className="text-sm text-muted mb-1">Target</div>
                 <div className="text-3xl font-bold text-white">{liveMetrics.possibleProduction}</div>
@@ -226,8 +239,19 @@ const OeeView: React.FC = () => {
             </div>
           </Card>
 
+          {/* Timeline de Produção */}
+          <Card className="p-4 md:p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-base md:text-lg font-semibold text-white">Timeline de Produção</h3>
+              <div className="text-sm text-muted">
+                Histórico de eventos
+              </div>
+            </div>
+            <ProductionTimeline />
+          </Card>
+
           {/* Métricas OEE */}
-          <div className="grid grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
             <Card className="p-4 text-center">
               <CircularGauge value={liveMetrics.oee} label="OEE" color="#3b82f6" />
             </Card>
@@ -245,7 +269,7 @@ const OeeView: React.FC = () => {
 
         {/* Detalhes da Produção - 1 coluna */}
         <div className="space-y-6">
-          <Card className="p-6">
+          <Card className="p-4 md:p-6">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold text-white">Production Details</h3>
               <span className="text-sm font-semibold text-blue-400">{currentShift?.name || 'Turno Ativo'}</span>
@@ -271,20 +295,20 @@ const OeeView: React.FC = () => {
             </div>
           </Card>
 
-          <Card className="p-6">
+          <Card className="p-4 md:p-6">
             <OeeTrendChart />
           </Card>
         </div>
       </div>
 
-      {/* Controles da Máquina */}
-      <MachineControls />
+      {/* Espaçamento para o Machine Controls fixo */}
+      <div className="pb-32"></div>
     </div>
   );
 };
 
 const OeeScreen: React.FC = () => {
-  const { view, setView, initializeDashboard, isLoading, error } = useProductionStore();
+  const { view, setView, initializeDashboard, isLoading, error, showProductSelectionModal } = useProductionStore();
   
   useLiveDataPolling(3000);
 
@@ -297,6 +321,8 @@ const OeeScreen: React.FC = () => {
     switch (view) {
       case ViewState.OEE:
         return <OeeView />;
+      case ViewState.DOWNTIME:
+        return <StopReasonModal />;
       case ViewState.STOP_REASON:
         return <StopReasonModal />;
       case ViewState.SETUP:
@@ -329,31 +355,25 @@ const OeeScreen: React.FC = () => {
     );
   }
 
-  // Mostrar erro se houver
-  if (error) {
-    return (
-      <div className="p-4 sm:p-6 lg:p-8 bg-background min-h-screen ml-16">
-        <Header />
-        <main className="mt-6">
-          <Sidebar />
-          <ErrorMessage 
-            message={error} 
-            onRetry={initializeDashboard}
-            onDismiss={() => useProductionStore.getState().clearError()}
-          />
-        </main>
-      </div>
-    );
-  }
+  // Não mostrar erro na interface - tratamento silencioso
+  // Os erros são apenas logados no console
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 bg-background min-h-screen ml-16">
-      <Sidebar />
-      <Header />
+    <div className="bg-background min-h-screen ml-16">
+      <div className="p-4 sm:p-6 lg:p-8">
+        <Sidebar />
+        <Header />
+        
+        <main className="mt-6">
+          {renderView()}
+        </main>
+        
+        {/* Modal de Seleção de Produto */}
+        {showProductSelectionModal && <ProductSelectionModal />}
+      </div>
       
-      <main className="mt-6">
-        {renderView()}
-      </main>
+      {/* Machine Controls Fixo - apenas para a view OEE */}
+      {view === ViewState.OEE && <MachineControls isFixed={true} />}
     </div>
   );
 };

@@ -2,42 +2,6 @@ import { create } from 'zustand';
 import { Device, DeviceFormData, DeviceSettingsState, DeviceSettingsActions, ProductionLine } from '../types/device';
 import ApiClient from '../services/api';
 
-// Mock de dados para desenvolvimento
-const mockDevices: Device[] = [
-  {
-    id: '1',
-    name: 'Dispositivo Linha 1',
-    lineId: 'line-1',
-    lineName: 'Linha de Produção 1',
-    apiEndpoint: 'https://www.wbms.com.br/serv/apiWbms.php',
-    token: 'abc123token',
-    equipmentId: 'Rivets_PH6601',
-    isActive: true,
-    lastConnection: '2024-01-15T10:30:00Z',
-    createdAt: '2024-01-01T00:00:00Z',
-    updatedAt: '2024-01-15T10:30:00Z'
-  },
-  {
-    id: '2',
-    name: 'Dispositivo Linha 2',
-    lineId: 'line-2',
-    lineName: 'Linha de Produção 2',
-    apiEndpoint: 'https://www.wbms.com.br/serv/apiWbms.php',
-    token: 'def456token',
-    equipmentId: 'Rivets_PH6602',
-    isActive: false,
-    lastConnection: '2024-01-10T08:15:00Z',
-    createdAt: '2024-01-01T00:00:00Z',
-    updatedAt: '2024-01-10T08:15:00Z'
-  }
-];
-
-const mockProductionLines: ProductionLine[] = [
-  { id: 'line-1', name: 'Linha de Produção 1', description: 'Linha principal de envase' },
-  { id: 'line-2', name: 'Linha de Produção 2', description: 'Linha secundária de envase' },
-  { id: 'line-3', name: 'Linha de Produção 3', description: 'Linha de embalagem' }
-];
-
 const initialFormState: DeviceFormData = {
   name: '',
   lineId: '',
@@ -62,9 +26,9 @@ export const useDeviceSettingsStore = create<DeviceSettingsStore>((set, get) => 
   fetchDevices: async () => {
     set({ isLoading: true });
     try {
-      // Simular chamada de API
+      // Em implementação real, buscar da API
       await new Promise(resolve => setTimeout(resolve, 1000));
-      set({ devices: mockDevices, isLoading: false });
+      set({ devices: [], isLoading: false });
     } catch (error) {
       console.error('Erro ao buscar dispositivos:', error);
       set({ isLoading: false });
@@ -73,9 +37,9 @@ export const useDeviceSettingsStore = create<DeviceSettingsStore>((set, get) => 
 
   fetchProductionLines: async () => {
     try {
-      // Simular chamada de API
+      // Em implementação real, buscar da API
       await new Promise(resolve => setTimeout(resolve, 500));
-      set({ productionLines: mockProductionLines });
+      set({ productionLines: [] });
     } catch (error) {
       console.error('Erro ao buscar linhas de produção:', error);
     }
@@ -121,7 +85,7 @@ export const useDeviceSettingsStore = create<DeviceSettingsStore>((set, get) => 
     set({ isLoading: true });
     
     try {
-      // Simular chamada de API
+      // Em implementação real, salvar na API
       await new Promise(resolve => setTimeout(resolve, 1500));
       
       if (selectedDevice) {
@@ -130,7 +94,7 @@ export const useDeviceSettingsStore = create<DeviceSettingsStore>((set, get) => 
           ...selectedDevice,
           name: formState.name,
           lineId: formState.lineId,
-          lineName: mockProductionLines.find(l => l.id === formState.lineId)?.name || '',
+          lineName: get().productionLines.find(l => l.id === formState.lineId)?.name || '',
           apiEndpoint: formState.apiEndpoint,
           token: formState.token,
           equipmentId: formState.equipmentId,
@@ -149,7 +113,7 @@ export const useDeviceSettingsStore = create<DeviceSettingsStore>((set, get) => 
           id: Date.now().toString(),
           name: formState.name,
           lineId: formState.lineId,
-          lineName: mockProductionLines.find(l => l.id === formState.lineId)?.name || '',
+          lineName: get().productionLines.find(l => l.id === formState.lineId)?.name || '',
           apiEndpoint: formState.apiEndpoint,
           token: formState.token,
           equipmentId: formState.equipmentId,
@@ -179,7 +143,7 @@ export const useDeviceSettingsStore = create<DeviceSettingsStore>((set, get) => 
     set({ isLoading: true, connectionTestResult: { status: 'idle', message: '' } });
     
     try {
-      // Simular chamada de API de teste
+      // Em implementação real, testar conexão na API
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       // Simular resultado baseado nos dados
