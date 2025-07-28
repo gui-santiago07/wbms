@@ -35,7 +35,7 @@ const Sidebar: React.FC = () => {
   ];
 
   return (
-    <div className="fixed left-0 top-0 h-full w-16 bg-surface p-4 flex flex-col items-center space-y-4">
+    <div className="fixed left-0 top-0 h-full w-16 bg-surface p-4 flex flex-col items-center space-y-4 z-40">
       <NavLink 
         to="/oee" 
         className={({ isActive }) => 
@@ -50,19 +50,7 @@ const Sidebar: React.FC = () => {
           <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
         </svg>
       </NavLink>
-      
-      <button
-        className="p-3 rounded-lg transition-colors text-gray-400 hover:text-white hover:bg-gray-700"
-        onClick={() => setView(ViewState.DOWNTIME)}
-        title="Análise de Paradas"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M12 2v20M2 12h20"/>
-          <circle cx="12" cy="12" r="10"/>
-        </svg>
-      </button>
-      
-      <NavLink 
+      {/* <NavLink 
         to="/dashboard" 
         className={({ isActive }) => 
           `p-3 rounded-lg transition-colors ${
@@ -78,7 +66,7 @@ const Sidebar: React.FC = () => {
           <rect x="14" y="14" width="7" height="7"/>
           <rect x="3" y="14" width="7" height="7"/>
         </svg>
-      </NavLink>
+      </NavLink> */}
       
       {/* Item de Configurações Unificado */}
       <div className="relative">

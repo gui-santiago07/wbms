@@ -5,7 +5,6 @@ import { AuthProvider } from './contexts/AuthContext';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import SetupRequiredRoute from './components/auth/SetupRequiredRoute';
 import LoginPage from './pages/LoginPage';
-import SetupPage from './pages/SetupPage';
 import DashboardPage from './pages/DashboardPage';
 import DeviceSettingsPage from './pages/DeviceSettingsPage';
 import ProductionControlPage from './pages/ProductionControlPage';
@@ -20,12 +19,7 @@ const App: React.FC = () => {
           {/* Rota de login */}
           <Route path="/login" element={<LoginPage />} />
           
-          {/* Rota de setup - protegida mas não requer setup completo */}
-          <Route path="/setup" element={
-            <ProtectedRoute>
-              <SetupPage />
-            </ProtectedRoute>
-          } />
+
           
           {/* Rotas protegidas que requerem setup completo */}
           <Route path="/" element={
@@ -70,7 +64,7 @@ const App: React.FC = () => {
           } />
           
           {/* Rota de fallback */}
-          <Route path="*" element={<Navigate to="/setup" replace />} />
+          <Route path="*" element={<Navigate to="/oee" replace />} />
         </Routes>
         
         {/* Debug Panel - sempre visível */}

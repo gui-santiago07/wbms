@@ -11,9 +11,9 @@ const LoginPage: React.FC = () => {
   const { login, isAuthenticated, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
 
-  // Se já estiver autenticado, redirecionar para setup ou OEE
+  // Se já estiver autenticado, redirecionar para OEE
   if (isAuthenticated) {
-    return <Navigate to="/setup" replace />;
+    return <Navigate to="/oee" replace />;
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -24,7 +24,7 @@ const LoginPage: React.FC = () => {
     try {
       const success = await login(username, password);
       if (success) {
-        navigate('/setup');
+        navigate('/oee');
       } else {
         setError('Credenciais inválidas. Tente novamente.');
       }

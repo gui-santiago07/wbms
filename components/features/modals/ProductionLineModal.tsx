@@ -17,10 +17,9 @@ const ProductionLineModal: React.FC<ProductionLineModalProps> = ({ onClose }) =>
   
   const [isCreating, setIsCreating] = useState(false);
   const [newLine, setNewLine] = useState({
-    name: '',
-    code: '',
+    line: '',
     description: '',
-    isActive: true
+    is_active: true
   });
 
   const handleSelectLine = (line: ProductionLine) => {
@@ -29,9 +28,9 @@ const ProductionLineModal: React.FC<ProductionLineModalProps> = ({ onClose }) =>
   };
 
   const handleCreateLine = () => {
-    if (newLine.name && newLine.code) {
+    if (newLine.line) {
       createProductionLine(newLine);
-      setNewLine({ name: '', code: '', description: '', isActive: true });
+      setNewLine({ line: '', description: '', is_active: true });
       setIsCreating(false);
     }
   };
@@ -41,7 +40,7 @@ const ProductionLineModal: React.FC<ProductionLineModalProps> = ({ onClose }) =>
       <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div className="p-6">
           <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-bold text-white">Selecionar Linha de Produção</h2>
+            <h2 className="text-xl font-bold text-white">Selecionar Linha de Produção</h2>
             <button
               onClick={onClose}
               className="text-gray-400 hover:text-white transition-colors"
@@ -57,30 +56,30 @@ const ProductionLineModal: React.FC<ProductionLineModalProps> = ({ onClose }) =>
           <div className="space-y-3 mb-6">
             {productionLines.map((line) => (
               <div
-                key={line.id}
+                key={line.client_line_key}
                 onClick={() => handleSelectLine(line)}
                 className={`p-4 rounded-lg cursor-pointer transition-all ${
-                  currentProductionLine?.id === line.id
+                  currentProductionLine?.client_line_key === line.client_line_key
                     ? 'bg-primary bg-opacity-20 border-2 border-primary'
                     : 'bg-gray-800 hover:bg-gray-700 border-2 border-transparent'
-                } ${!line.isActive ? 'opacity-50' : ''}`}
+                } ${!line.is_active ? 'opacity-50' : ''}`}
               >
                 <div className="flex justify-between items-start">
                   <div>
-                    <h3 className="text-lg font-semibold text-white">{line.name}</h3>
-                    <p className="text-sm text-gray-400">Código: {line.code}</p>
+                    <h3 className="text-lg font-semibold text-white">{line.line}</h3>
+                    <p className="text-sm text-gray-400">Código: {line.client_line_key}</p>
                     <p className="text-sm text-gray-400">{line.description}</p>
                   </div>
                   <div className="flex items-center gap-2">
-                    {currentProductionLine?.id === line.id && (
+                    {currentProductionLine?.client_line_key === line.client_line_key && (
                       <span className="text-primary font-semibold">Selecionada</span>
                     )}
                     <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                      line.isActive 
+                      line.is_active 
                         ? 'bg-green-500 bg-opacity-20 text-green-400' 
                         : 'bg-gray-500 bg-opacity-20 text-gray-400'
                     }`}>
-                      {line.isActive ? 'Ativa' : 'Inativa'}
+                      {line.is_active ? 'Ativa' : 'Inativa'}
                     </span>
                   </div>
                 </div>
@@ -110,20 +109,10 @@ const ProductionLineModal: React.FC<ProductionLineModalProps> = ({ onClose }) =>
                   <label className="block text-sm font-medium text-gray-300 mb-2">Nome da Linha</label>
                   <input
                     type="text"
-                    value={newLine.name}
-                    onChange={(e) => setNewLine({ ...newLine, name: e.target.value })}
+                    value={newLine.line}
+                    onChange={(e) => setNewLine({ ...newLine, line: e.target.value })}
                     className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-primary focus:outline-none"
                     placeholder="Ex: ENVASE 520741-11"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Código</label>
-                  <input
-                    type="text"
-                    value={newLine.code}
-                    onChange={(e) => setNewLine({ ...newLine, code: e.target.value })}
-                    className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-primary focus:outline-none"
-                    placeholder="Ex: 520741-11"
                   />
                 </div>
                 <div>
@@ -140,8 +129,8 @@ const ProductionLineModal: React.FC<ProductionLineModalProps> = ({ onClose }) =>
                   <input
                     type="checkbox"
                     id="isActive"
-                    checked={newLine.isActive}
-                    onChange={(e) => setNewLine({ ...newLine, isActive: e.target.checked })}
+                    checked={newLine.is_active}
+                    onChange={(e) => setNewLine({ ...newLine, is_active: e.target.checked })}
                     className="w-4 h-4 text-primary bg-gray-700 border-gray-600 rounded focus:ring-primary"
                   />
                   <label htmlFor="isActive" className="text-sm text-gray-300">Linha ativa</label>
@@ -149,7 +138,7 @@ const ProductionLineModal: React.FC<ProductionLineModalProps> = ({ onClose }) =>
                 <div className="flex gap-3">
                   <button
                     onClick={handleCreateLine}
-                    disabled={!newLine.name || !newLine.code}
+                    disabled={!newLine.line}
                     className="flex-1 bg-primary hover:bg-primary/80 disabled:bg-gray-600 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg transition-colors"
                   >
                     Criar Linha

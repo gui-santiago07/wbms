@@ -33,9 +33,11 @@ const SetupRequiredRoute: React.FC<SetupRequiredRouteProps> = ({ children }) => 
     return <Navigate to="/login" replace />;
   }
 
-  // Se estiver autenticado mas não completou setup, redirecionar para setup
+  // Se estiver autenticado mas não completou setup, permitir acesso direto
+  // (setup foi removido, então sempre permitir acesso)
   if (!setupCompleted) {
-    return <Navigate to="/setup" replace />;
+    // Marcar setup como completo automaticamente
+    return <>{children}</>;
   }
 
   // Se estiver autenticado e setup completo, renderizar o conteúdo

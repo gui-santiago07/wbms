@@ -54,7 +54,7 @@ const ShiftModal: React.FC<ShiftModalProps> = ({ onClose }) => {
       <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div className="p-6">
           <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-bold text-white">Selecionar Turno</h2>
+            <h2 className="text-xl font-bold text-white">Selecionar Turno</h2>
             <div className="flex items-center gap-2">
               <button
                 onClick={handleRefreshShifts}

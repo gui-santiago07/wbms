@@ -7,13 +7,20 @@ interface EnvironmentConfig {
 
 const environments: Record<string, EnvironmentConfig> = {
   development: {
-    apiBaseUrl: 'http://localhost:8090/api',
+    apiBaseUrl: '/api', // Usar proxy local para evitar CORS
+    // apiBaseUrl: 'https://staging.option7.ai/api', // URL direta (causa CORS)
+    // apiBaseUrl: 'http://localhost:8090/api',
     pollingInterval: 3000, // 3 segundos para desenvolvimento
     defaultShiftId: 'turno_1'
   },
   staging: {
     apiBaseUrl: 'https://staging.option7.ai/api',
     pollingInterval: 5000, // 5 segundos para staging
+    defaultShiftId: 'turno_1' 
+  },
+  staging_direct: {
+    apiBaseUrl: 'https://staging.option7.ai/api',
+    pollingInterval: 5000, // 5 segundos para staging direto
     defaultShiftId: 'turno_1' 
   },
   production: {
@@ -40,6 +47,9 @@ const getCurrentEnvironment = (): string => {
 
   // 🔧 2. PARA FORÇAR STAGING LOCALMENTE, DESCOMENTE A LINHA ABAIXO:
   // return 'staging';
+  
+  // 🔧 2.1. PARA USAR STAGING DIRETO (SEM PROXY), DESCOMENTE A LINHA ABAIXO:
+  // return 'staging_direct';
   
   // 🔧 3. Usar window.location.hostname para detectar ambiente (padrão)
   const hostname = window.location.hostname;

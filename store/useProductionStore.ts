@@ -1,11 +1,13 @@
 
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import { MachineStatus, ViewState, LiveMetrics, CurrentJob, DowntimeEvent, DowntimeReasonCategory, ProductionOrder, Product, ProductionLine, Shift, TimeDistribution, StopReason, ProductionStatus, ProductSelection, SetupType, Job, ApiProduct, ApiShift } from '../types';
 import DashboardService from '../services/dashboardService';
 import ShiftService from '../services/shiftService';
 import WbmsService from '../services/wbmsService';
 import Option7ApiService from '../services/option7ApiService';
 import JobsService from '../services/jobsService';
+import TimesheetService, { TimelineEvent } from '../services/timesheetService';
 
 interface ProductionState {
   machineStatus: MachineStatus;
@@ -29,6 +31,7 @@ interface ProductionState {
   wbmsService: WbmsService;
   option7ApiService: Option7ApiService;
   jobsService: JobsService;
+  timesheetService: TimesheetService;
   oeeHistory: {
     points: Array<{ x: number; y: number }>;
     timeLabels: string[];
@@ -44,6 +47,11 @@ interface ProductionState {
   setupTypes: SetupType[];
   showProductSelectionModal: boolean;
   
+  // Timeline de produção
+  timelineEvents: TimelineEvent[];
+  timelineLoading: boolean;
+  timelineError: string | null;
+  
   setMachineStatus: (status: MachineStatus) => void;
   setView: (view: ViewState) => void;
   fetchLiveData: () => Promise<void>;
@@ -56,7 +64,7 @@ interface ProductionState {
   startProduction: () => void;
   setCurrentProductionLine: (line: ProductionLine) => void;
   setCurrentShift: (shift: Shift) => void;
-  createProductionLine: (line: Omit<ProductionLine, 'id'>) => void;
+  createProductionLine: (line: Omit<ProductionLine, 'client_line_key'>) => void;
   createShift: (shift: Omit<Shift, 'id'>) => void;
   loadRealShifts: () => Promise<boolean>;
   clearError: () => void;
@@ -77,10 +85,13 @@ interface ProductionState {
   fetchDowntimeHistory: () => Promise<void>;
   fetchDashboardComposite: () => Promise<void>;
   fetchStopReasons: () => Promise<void>;
+  fetchTimelineData: () => Promise<void>;
   formatTime: (seconds: number) => string;
 }
 
-export const useProductionStore = create<ProductionState>((set, get) => ({
+export const useProductionStore = create<ProductionState>()(
+  persist(
+    (set, get) => ({
   machineStatus: MachineStatus.RUNNING,
   view: ViewState.DASHBOARD,
   previousView: null,
@@ -116,6 +127,7 @@ export const useProductionStore = create<ProductionState>((set, get) => ({
   wbmsService: new WbmsService(),
   option7ApiService: new Option7ApiService(),
   jobsService: new JobsService(),
+  timesheetService: new TimesheetService(),
   oeeHistory: null,
   
   // Novas propriedades WBMS
@@ -138,6 +150,11 @@ export const useProductionStore = create<ProductionState>((set, get) => ({
   availableProducts: [],
   setupTypes: [],
   showProductSelectionModal: false,
+  
+  // Timeline de produção
+  timelineEvents: [],
+  timelineLoading: false,
+  timelineError: null,
 
     setMachineStatus: (status: MachineStatus) => {
     set({ machineStatus: status });
@@ -165,7 +182,22 @@ export const useProductionStore = create<ProductionState>((set, get) => ({
     }
   },
   
-  setView: (view: ViewState) => set({ view }),
+  setView: (view: ViewState) => {
+    const currentView = get().view;
+    console.log('🔄 View alterada:', { 
+      from: currentView, 
+      to: view, 
+      timestamp: new Date().toISOString() 
+    });
+    
+    // Garantir que sempre temos uma view válida
+    if (!Object.values(ViewState).includes(view)) {
+      console.warn('⚠️ View inválida detectada, usando DASHBOARD como fallback');
+      view = ViewState.DASHBOARD;
+    }
+    
+    set({ view });
+  },
 
   initializeDashboard: async () => {
     console.log('🏪 Store: Iniciando dashboard...');
@@ -184,6 +216,10 @@ export const useProductionStore = create<ProductionState>((set, get) => ({
       if (currentShift) {
         console.log('🏪 Store: Carregando dados compostos do dashboard...');
         await get().fetchDashboardComposite();
+        
+        // Carregar dados da timeline de produção
+        console.log('🏪 Store: Carregando timeline de produção...');
+        await get().fetchTimelineData();
       } else {
         console.log('🏪 Store: Turno não definido');
         set({ isLoading: false });
@@ -903,4 +939,41 @@ export const useProductionStore = create<ProductionState>((set, get) => ({
       set({ isLoading: false });
     }
   },
-}));
+
+  fetchTimelineData: async () => {
+    const { timesheetService } = get();
+    console.log('📈 Store: Buscando dados da timeline de produção...');
+    set({ timelineLoading: true, timelineError: null });
+    
+    try {
+      const timelineEvents = await timesheetService.fetchTimelineData();
+      
+      set({ 
+        timelineEvents,
+        timelineLoading: false,
+        timelineError: null
+      });
+      
+      console.log('✅ Store: Timeline de produção carregada:', {
+        totalEvents: timelineEvents.length,
+        events: timelineEvents.slice(0, 3) // Log dos primeiros 3 eventos
+      });
+    } catch (error) {
+      console.error('❌ Store: Erro ao buscar dados da timeline (tratado silenciosamente):', error);
+      // Não definir erro no estado - tratamento silencioso
+      set({ timelineLoading: false });
+    }
+  },
+    }),
+    {
+      name: 'production-store',
+      storage: createJSONStorage(() => localStorage),
+      partialize: (state) => ({
+        view: state.view,
+        machineStatus: state.machineStatus,
+        currentShift: state.currentShift,
+        previousView: state.previousView,
+      }),
+    }
+  )
+);

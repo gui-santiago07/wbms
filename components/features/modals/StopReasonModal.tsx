@@ -4,7 +4,7 @@ import { useClock } from '../../../hooks/useClock';
 import { useAuth } from '../../../contexts/AuthContext';
 import Card from '../../ui/Card';
 import { DowntimeReasonCategory } from '../../../types';
-import ProductionLineModal from './ProductionLineModal';
+
 import ShiftModal from './ShiftModal';
 import { ViewState } from '../../../types';
 import StopReasonsList from '../dashboard/StopReasonsList';
@@ -19,6 +19,17 @@ const CircularGauge: React.FC<{
   const radius = size / 2 - 15;
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - (value / 100) * circumference;
+
+  // Calcular tamanhos responsivos baseados no size do círculo
+  const getTextSize = () => {
+    if (size <= 100) return { value: 'text-lg', label: 'text-xs' };
+    if (size <= 140) return { value: 'text-xl', label: 'text-sm' };
+    if (size <= 160) return { value: 'text-2xl', label: 'text-sm' };
+    if (size <= 180) return { value: 'text-3xl', label: 'text-base' };
+    return { value: 'text-4xl', label: 'text-base' };
+  };
+
+  const { value: valueTextSize, label: labelTextSize } = getTextSize();
 
   return (
     <div className="flex flex-col items-center">
@@ -47,20 +58,20 @@ const CircularGauge: React.FC<{
             style={{ transition: 'stroke-dashoffset 0.5s ease-out' }}
           />
         </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-3xl font-bold text-white">{value.toFixed(1)}%</span>
-          <span className="text-base text-white font-medium">{label}</span>
+        <div className="absolute inset-0 flex flex-col items-center justify-center px-3">
+          <span className={`${valueTextSize} font-bold text-white leading-none`}>{value.toFixed(1)}%</span>
+          <span className={`${labelTextSize} text-white font-medium leading-tight text-center mt-1`}>{label}</span>
         </div>
       </div>
-      <div className="flex justify-center gap-4 mt-3 text-xs">
+      <div className="flex justify-center gap-3 mt-3 text-xs">
         <div className="text-center">
-          <div className="text-green-400 font-bold">Availability (92,5%)</div>
+          <div className="text-green-400 font-bold text-xs">Availability (92,5%)</div>
         </div>
         <div className="text-center">
-          <div className="text-orange-400 font-bold">Performance (87,7%)</div>
+          <div className="text-orange-400 font-bold text-xs">Performance (87,7%)</div>
         </div>
         <div className="text-center">
-          <div className="text-purple-400 font-bold">Quality (98,1%)</div>
+          <div className="text-purple-400 font-bold text-xs">Quality (98,1%)</div>
         </div>
       </div>
     </div>
@@ -68,13 +79,13 @@ const CircularGauge: React.FC<{
 };
 
 const StopReasonModal: React.FC = () => {
-  const { liveMetrics, currentJob, downtimeReasons, downtimeHistory, registerStopReason, currentProductionLine, currentShift, fetchStopReasons, fetchDowntimeHistory, isLoading, error, setView } = useProductionStore();
+  const { liveMetrics, currentJob, downtimeReasons, downtimeHistory, registerStopReason, currentShift, fetchStopReasons, fetchDowntimeHistory, isLoading, error, setView } = useProductionStore();
   const [selectedReason, setSelectedReason] = useState<string>('');
   const [showReasonModal, setShowReasonModal] = useState(false);
   const [activeCategory, setActiveCategory] = useState<string>(downtimeReasons[0]?.category || '');
   const [searchTerm, setSearchTerm] = useState('');
   const [customReason, setCustomReason] = useState<string>('');
-  const [showProductionLineModal, setShowProductionLineModal] = useState(false);
+
   const [showShiftModal, setShowShiftModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const currentTime = useClock();
@@ -159,8 +170,8 @@ const StopReasonModal: React.FC = () => {
       return (
       <div className="min-h-screen bg-background flex flex-col ml-16 overflow-y-auto">
       {/* Header Vermelho - seguindo especificações exatas */}
-      <header className="bg-red-600 h-16 flex items-center justify-between relative" style={{ paddingTop: '16px', paddingBottom: '16px', paddingLeft: '16px', paddingRight: '16px' }}>
-        {/* Logotipo e Linha de Produção (Lado Esquerdo) */}
+      <header className="bg-primary-600 h-16 flex items-center justify-between relative" style={{ paddingTop: '16px', paddingBottom: '16px', paddingLeft: '16px', paddingRight: '16px' }}>
+        {/* Logotipo (Lado Esquerdo) */}
         <div className="flex items-center">
           <div className="bg-white p-2 rounded">
             <img 
@@ -169,24 +180,18 @@ const StopReasonModal: React.FC = () => {
               className="h-6 w-auto"
             />
           </div>
-          <button
-            onClick={() => setShowProductionLineModal(true)}
-            className="text-2xl font-bold text-white ml-4 hover:text-gray-200 transition-colors cursor-pointer"
-          >
-            {currentProductionLine?.line || 'Linha de Produção'}
-          </button>
         </div>
         
         {/* PARADA: INFORME O MOTIVO (Centro) */}
         <div className="absolute left-1/2 transform -translate-x-1/2">
-          <h2 className="text-2xl font-bold text-white whitespace-nowrap">PARADA: INFORME O MOTIVO</h2>
+          <h2 className="text-xl font-bold text-white whitespace-nowrap">INFORMAÇÕES DE PARADAS</h2>
         </div>
         
         {/* Turno e Ícones (Lado Direito) */}
         <div className="flex items-center gap-4">
           <button
             onClick={() => setShowShiftModal(true)}
-            className="text-2xl font-bold text-white mr-4 hover:text-gray-200 transition-colors cursor-pointer"
+            className="text-lg font-bold text-white mr-4 hover:text-gray-200 transition-colors cursor-pointer"
           >
             {currentShift?.name || 'Turno'}
           </button>
@@ -205,31 +210,6 @@ const StopReasonModal: React.FC = () => {
       {/* Conteúdo Principal */}
       <div className="flex-1 overflow-y-auto">
         {/* Primeira Linha de Cards - 16px do header */}
-        <div className="grid grid-cols-3 gap-4 mx-4 mt-4">
-          {/* Card TOTAL */}
-          <Card className="bg-gray-700 px-4 py-4">
-            <div className="text-left">
-              <div className="text-sm text-gray-400 mb-2">TOTAL</div>
-              <div className="text-5xl font-bold text-white text-center">240</div>
-            </div>
-          </Card>
-          
-          {/* Card BOAS */}
-          <Card className="bg-gray-700 px-4 py-4">
-            <div className="text-left">
-              <div className="text-sm text-gray-400 mb-2">BOAS</div>
-              <div className="text-5xl font-bold text-white text-center">213</div>
-            </div>
-          </Card>
-          
-          {/* Card REJEITOS */}
-          <Card className="bg-gray-700 px-4 py-4">
-            <div className="text-left">
-              <div className="text-sm text-gray-400 mb-2">REJEITOS</div>
-              <div className="text-5xl font-bold text-white text-center">03</div>
-            </div>
-          </Card>
-        </div>
 
         {/* Barra de Status PARADA - 16px dos cards */}
         <div className="mx-4 mt-4">
@@ -237,21 +217,21 @@ const StopReasonModal: React.FC = () => {
             onClick={() => setShowReasonModal(true)}
             className="w-full bg-red-600 hover:bg-red-700 text-white py-3 px-6 rounded-lg text-xl font-bold transition-colors text-center"
           >
-            PARADA -INFORME O MOTIVO
+            PARADA - INFORME O MOTIVO
           </button>
         </div>
 
         {/* Seção Inferior - 16px da barra de status */}
-        <div className="grid grid-cols-2 gap-4 mx-4 mt-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mx-4 mt-4">
           {/* Coluna Esquerda - Análise de Paradas */}
           <div className="space-y-4">
             {/* Métricas OEE e Disponibilidade */}
-            <div className="grid grid-cols-2 gap-4">
-              <Card className="p-4 text-center bg-gray-800">
-                <CircularGauge value={liveMetrics.oee} label="OEE" color="#3b82f6" size={120} />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Card className="p-6 text-center bg-gray-800">
+                <CircularGauge value={liveMetrics.oee} label="OEE" color="#3b82f6" size={160} />
               </Card>
-              <Card className="p-4 text-center bg-gray-800">
-                <CircularGauge value={liveMetrics.availability} label="Disponibilidade" color="#22c55e" size={120} />
+              <Card className="p-6 text-center bg-gray-800">
+                <CircularGauge value={liveMetrics.availability} label="Disponibilidade" color="#22c55e" size={160} />
               </Card>
             </div>
 
@@ -299,7 +279,7 @@ const StopReasonModal: React.FC = () => {
              <div className="space-y-4">
                {/* Título da Seção */}
                <div>
-                 <h3 className="text-2xl font-bold text-white text-left mb-2">Histórico de Paradas</h3>
+                 <h3 className="text-xl font-bold text-white text-left mb-2">Histórico de Paradas</h3>
                  <p className="text-sm text-gray-400">Análise dos motivos e tempos de parada</p>
                </div>
 
@@ -378,7 +358,7 @@ const StopReasonModal: React.FC = () => {
         <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
           <div className="bg-surface rounded-lg p-6 max-w-4xl w-full mx-4 max-h-[80vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
-              <h3 className="text-2xl font-bold text-white">Selecione o Motivo da Parada</h3>
+              <h3 className="text-xl font-bold text-white">Selecione o Motivo da Parada</h3>
               
               {error && (
                 <div className="bg-red-600 text-white px-4 py-2 rounded-md text-sm">
@@ -398,14 +378,6 @@ const StopReasonModal: React.FC = () => {
               <div className="flex items-center gap-4">
                 {/* Campo para motivo customizado */}
                 <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="Digite o motivo da parada..."
-                    value={customReason}
-                    onChange={(e) => setCustomReason(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && handleCustomReasonSubmit()}
-                    className="w-80 bg-background p-3 rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-primary text-white"
-                  />
                   <button
                     onClick={handleCustomReasonSubmit}
                     disabled={!customReason.trim() || isSubmitting}
@@ -602,10 +574,7 @@ const StopReasonModal: React.FC = () => {
         </div>
       </div>
 
-      {/* Modais de Linha de Produção e Turno */}
-      {showProductionLineModal && (
-        <ProductionLineModal onClose={() => setShowProductionLineModal(false)} />
-      )}
+      {/* Modal de Turno */}
       {showShiftModal && (
         <ShiftModal onClose={() => setShowShiftModal(false)} />
       )}

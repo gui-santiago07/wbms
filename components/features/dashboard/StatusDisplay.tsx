@@ -11,15 +11,15 @@ const StatusDisplay: React.FC = () => {
   }, [updateProductionStatus]);
 
   return (
-    <div className="flex items-center gap-3 bg-surface px-4 py-2 rounded-lg">
+    <div className="flex items-center gap-2 bg-surface px-3 py-1.5 rounded-lg">
       <div 
-        className="w-3 h-3 rounded-full animate-pulse"
+        className="w-2.5 h-2.5 rounded-full animate-pulse"
         style={{ backgroundColor: productionStatus.color }}
       />
-      <div className="flex items-center gap-2">
-        <span className="text-2xl">{productionStatus.icon}</span>
+      <div className="flex items-center gap-1.5">
+        <span className="text-lg">{productionStatus.icon}</span>
         <span 
-          className="text-lg font-bold"
+          className="text-sm font-bold"
           style={{ color: productionStatus.color }}
         >
           {productionStatus.status}
@@ -27,20 +27,20 @@ const StatusDisplay: React.FC = () => {
       </div>
       
       {/* Tempo Produzindo */}
-      <div className="flex items-center gap-2 ml-4">
-        <span className="text-sm text-muted">Produzindo:</span>
-        <span className="text-sm font-semibold text-white">
+      <div className="flex items-center gap-1.5 ml-3">
+        <span className="text-xs text-muted">Produzindo:</span>
+        <span className="text-xs font-semibold text-white">
           {productionStatus.producingTime}
         </span>
-        <span className="text-sm text-muted">
+        <span className="text-xs text-muted">
           ({productionStatus.producingPercentage}%)
         </span>
       </div>
       
       {/* Tempo Parado */}
-      <div className="flex items-center gap-2 ml-4">
-        <span className="text-sm text-muted">Parado:</span>
-        <span className="text-sm font-semibold text-red-400">
+      <div className="flex items-center gap-1.5 ml-3">
+        <span className="text-xs text-muted">Parado:</span>
+        <span className="text-xs font-semibold text-red-400">
           {productionStatus.stoppedTime}
         </span>
       </div>

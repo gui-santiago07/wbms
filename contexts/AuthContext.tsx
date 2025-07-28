@@ -74,12 +74,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         name: cleanPhpSerializedString(response.nome), // Limpar nome serializado
         username: cleanPhpSerializedString(username), // Limpar username serializado
         role: 'Operador', // Role será fornecido pela API real
-        setupCompleted: false // Sempre resetar setup em novo login
+        setupCompleted: true // Setup sempre completo (tela removida)
       };
       
       setUser(userToStore);
       localStorage.setItem('oee_user', JSON.stringify(userToStore));
-      localStorage.removeItem('oee_setup_completed'); // Resetar setup completo
+      localStorage.setItem('oee_setup_completed', 'true'); // Setup sempre completo
       setIsLoading(false);
       return true;
     } catch (error) {

@@ -12,9 +12,10 @@ import ProductionChart from '../components/features/dashboard/ProductionChart';
 import MachineControls from '../components/features/dashboard/MachineControls';
 import StopReasonModal from '../components/features/modals/StopReasonModal';
 import SetupModal from '../components/features/modals/SetupModal';
-import ProductionLineModal from '../components/features/modals/ProductionLineModal';
+
 import ShiftModal from '../components/features/modals/ShiftModal';
 import { useLiveDataPolling } from '../hooks/useLiveDataPolling';
+import { useMachineControlsVisibility } from '../hooks/useMachineControlsVisibility';
 import Card from '../components/ui/Card';
 import Sidebar from '../components/features/dashboard/Sidebar';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
@@ -26,24 +27,24 @@ const DashboardView: React.FC = () => {
   const goodPartsPercent = liveMetrics.total > 0 ? (liveMetrics.good / liveMetrics.total) * 100 : 100; // Sempre 100% (sem rejeitos)
 
   return (
-    <div className="space-y-4">
-       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+    <div className="space-y-3">
+       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         {/* First Column */}
-        <div className="lg:col-span-2 space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+        <div className="lg:col-span-2 space-y-3">
+          <div className="grid grid-cols-2 gap-3">
             <KpiCard title="TOTAL" value={liveMetrics.total} />
             <KpiCard title="BOAS" value={liveMetrics.good} />
           </div>
-          <Card className="flex justify-between items-center p-4">
+          <Card className="flex justify-between items-center p-3">
              <StatusDisplay />
              <div className="text-right">
                 <div className="flex items-center justify-end gap-2">
                     <span className="text-success">Good Parts</span>
-                    <span className="font-bold text-lg">{goodPartsPercent.toFixed(1)}%</span>
+                    <span className="font-bold text-base">{goodPartsPercent.toFixed(1)}%</span>
                 </div>
              </div>
           </Card>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div className="md:col-span-1">
                 <OeeGauge />
             </div>
@@ -54,14 +55,14 @@ const DashboardView: React.FC = () => {
         </div>
 
         {/* Second Column */}
-        <div className="lg:col-span-1 space-y-4">
+        <div className="lg:col-span-1 space-y-3">
             <ProductionDetails />
             <ProductionChart />
         </div>
       </div>
       
       {/* Espaçamento para o Machine Controls fixo */}
-      <div className="pb-32"></div>
+      <div className="pb-36"></div>
     </div>
   );
 };
@@ -72,10 +73,27 @@ const DashboardPage: React.FC = () => {
   
   useLiveDataPolling(config.pollingInterval);
 
+  // Garantir view válida na inicialização
+  useEffect(() => {
+    if (!view || ![ViewState.DASHBOARD, ViewState.OEE, ViewState.STOP_REASON, ViewState.SETUP].includes(view)) {
+      console.log('🔄 View inválida na inicialização, redirecionando para DASHBOARD');
+      setView(ViewState.DASHBOARD);
+    }
+  }, []);
+
   // Inicializar dados do dashboard na primeira carga
   useEffect(() => {
     initializeDashboard();
   }, [initializeDashboard]);
+
+  // Hook personalizado para visibilidade do MachineControls
+  const shouldShowMachineControls = useMachineControlsVisibility();
+
+  // Debug: verificar renderização do MachineControls
+  useEffect(() => {
+    console.log('🎯 DashboardPage: Renderizando MachineControls');
+    console.log('🎯 DashboardPage: View atual:', view);
+  }, [view]);
 
   const renderView = () => {
     switch (view) {
@@ -85,8 +103,7 @@ const DashboardPage: React.FC = () => {
         return <StopReasonModal />;
       case ViewState.SETUP:
         return <SetupModal />;
-      case ViewState.PRODUCTION_LINE_MODAL:
-        return <ProductionLineModal onClose={() => setView(ViewState.DASHBOARD)} />;
+
       case ViewState.SHIFT_MODAL:
         return <ShiftModal onClose={() => setView(ViewState.DASHBOARD)} />;
       default:
@@ -116,21 +133,25 @@ const DashboardPage: React.FC = () => {
   // Não mostrar erro na interface - tratamento silencioso
   // Os erros são apenas logados no console
 
-
-
   return (
-    <div className="bg-background min-h-screen ml-16">
-      <div className="p-4 sm:p-6 lg:p-8">
-        <Header />
-        <main className="mt-6">
-          <Sidebar />
-          {renderView()}
-        </main>
+    <>
+      <div className="bg-background min-h-screen ml-16">
+        <div className="p-3 sm:p-4 lg:p-5">
+          <Header />
+          <main className="mt-4">
+            <Sidebar />
+            {renderView()}
+          </main>
+        </div>
       </div>
       
-      {/* Machine Controls Fixo - apenas para a view DASHBOARD */}
-      {view === ViewState.DASHBOARD && <MachineControls isFixed={true} />}
-    </div>
+      {/* Machine Controls - apenas para view DASHBOARD */}
+      {view === ViewState.DASHBOARD && (
+        <div data-testid="machine-controls-container">
+          <MachineControls isFixed={true} />
+        </div>
+      )}
+    </>
   );
 };
 

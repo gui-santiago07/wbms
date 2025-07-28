@@ -6,7 +6,7 @@ import MachineControls from './MachineControls';
 import Sidebar from './Sidebar';
 import StopReasonModal from '../modals/StopReasonModal';
 import SetupModal from '../modals/SetupModal';
-import ProductionLineModal from '../modals/ProductionLineModal';
+
 import ShiftModal from '../modals/ShiftModal';
 import ProductSelectionModal from '../modals/ProductSelectionModal';
 import LoadingSpinner from '../../ui/LoadingSpinner';
@@ -18,6 +18,7 @@ import ProductionTimeline from './ProductionTimeline';
 import { useProductionStore } from '../../../store/useProductionStore';
 import { ViewState } from '../../../types';
 import { useLiveDataPolling } from '../../../hooks/useLiveDataPolling';
+import { useMachineControlsVisibility } from '../../../hooks/useMachineControlsVisibility';
 import { config } from '../../../config/environment';
 
 // Tipos para os filtros de tempo
@@ -33,6 +34,17 @@ const CircularGauge: React.FC<{
   const radius = size / 2 - 10;
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - (value / 100) * circumference;
+
+  // Calcular tamanhos responsivos baseados no size do círculo
+  const getTextSize = () => {
+    if (size <= 100) return { value: 'text-lg', label: 'text-xs' };
+    if (size <= 140) return { value: 'text-xl', label: 'text-sm' };
+    if (size <= 160) return { value: 'text-2xl', label: 'text-sm' };
+    if (size <= 180) return { value: 'text-3xl', label: 'text-base' };
+    return { value: 'text-4xl', label: 'text-base' };
+  };
+
+  const { value: valueTextSize, label: labelTextSize } = getTextSize();
 
   return (
     <div className="flex flex-col items-center">
@@ -61,11 +73,11 @@ const CircularGauge: React.FC<{
             style={{ transition: 'stroke-dashoffset 0.5s ease-out' }}
           />
         </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-2xl font-bold text-white">{value.toFixed(1)}%</span>
+        <div className="absolute inset-0 flex flex-col items-center justify-center px-3">
+          <span className={`${valueTextSize} font-bold text-white leading-none`}>{value.toFixed(1)}%</span>
         </div>
       </div>
-      <span className="text-sm text-muted mt-2">{label}</span>
+      <span className={`${labelTextSize} text-muted mt-2 text-center`}>{label}</span>
     </div>
   );
 };
@@ -252,17 +264,17 @@ const OeeView: React.FC = () => {
 
           {/* Métricas OEE */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
-            <Card className="p-4 text-center">
-              <CircularGauge value={liveMetrics.oee} label="OEE" color="#3b82f6" />
+            <Card className="p-5 text-center">
+              <CircularGauge value={liveMetrics.oee} label="OEE" color="#3b82f6" size={140} />
             </Card>
-            <Card className="p-4 text-center">
-              <CircularGauge value={liveMetrics.availability} label="Availability" color="#22c55e" />
+            <Card className="p-5 text-center">
+              <CircularGauge value={liveMetrics.availability} label="Availability" color="#22c55e" size={140} />
             </Card>
-            <Card className="p-4 text-center">
-              <CircularGauge value={liveMetrics.performance} label="Performance" color="#f59e0b" />
+            <Card className="p-5 text-center">
+              <CircularGauge value={liveMetrics.performance} label="Performance" color="#f59e0b" size={140} />
             </Card>
-            <Card className="p-4 text-center">
-              <CircularGauge value={liveMetrics.quality} label="Quality" color="#8b5cf6" />
+            <Card className="p-5 text-center">
+              <CircularGauge value={liveMetrics.quality} label="Quality" color="#8b5cf6" size={140} />
             </Card>
           </div>
         </div>
@@ -312,10 +324,21 @@ const OeeScreen: React.FC = () => {
   
   useLiveDataPolling(3000);
 
+  // Garantir view válida na inicialização
+  useEffect(() => {
+    if (!view || ![ViewState.DASHBOARD, ViewState.OEE, ViewState.STOP_REASON, ViewState.SETUP].includes(view)) {
+      console.log('🔄 View inválida na inicialização, redirecionando para OEE');
+      setView(ViewState.OEE);
+    }
+  }, []);
+
   // Inicializar dados do dashboard na primeira carga
   useEffect(() => {
     initializeDashboard();
   }, [initializeDashboard]);
+
+  // Hook personalizado para visibilidade do MachineControls
+  const shouldShowMachineControls = useMachineControlsVisibility();
 
   const renderView = () => {
     switch (view) {
@@ -327,8 +350,7 @@ const OeeScreen: React.FC = () => {
         return <StopReasonModal />;
       case ViewState.SETUP:
         return <SetupModal />;
-      case ViewState.PRODUCTION_LINE_MODAL:
-        return <ProductionLineModal onClose={() => setView(ViewState.OEE)} />;
+
       case ViewState.SHIFT_MODAL:
         return <ShiftModal onClose={() => setView(ViewState.OEE)} />;
       default:
@@ -360,11 +382,11 @@ const OeeScreen: React.FC = () => {
 
   return (
     <div className="bg-background min-h-screen ml-16">
-      <div className="p-4 sm:p-6 lg:p-8">
+      <div className="p-3 sm:p-4 lg:p-5">
         <Sidebar />
         <Header />
         
-        <main className="mt-6">
+        <main className="mt-4">
           {renderView()}
         </main>
         
@@ -372,8 +394,12 @@ const OeeScreen: React.FC = () => {
         {showProductSelectionModal && <ProductSelectionModal />}
       </div>
       
-      {/* Machine Controls Fixo - apenas para a view OEE */}
-      {view === ViewState.OEE && <MachineControls isFixed={true} />}
+      {/* Machine Controls com lógica robusta */}
+      {shouldShowMachineControls && (
+        <div data-testid="machine-controls-container">
+          <MachineControls isFixed={true} />
+        </div>
+      )}
     </div>
   );
 };
