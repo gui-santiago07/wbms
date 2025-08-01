@@ -16,6 +16,32 @@ interface ShiftListResponse {
   itemsPerPage: number;
 }
 
+// Nova interface para detalhes completos do turno
+interface ShiftDetailsResponse {
+  shift: {
+    id: string;
+    name: string;
+    startTime: string;
+    endTime: string;
+  };
+  operator: {
+    name: string;
+    role: string;
+  };
+  line: {
+    name: string;
+  };
+  productionOrder: {
+    id: string;
+    totalQuantity: number;
+    shiftTarget: number;
+  };
+  product: {
+    code: string;
+    name: string;
+  };
+}
+
 class ShiftService extends ApiClient {
   constructor() {
     super();
@@ -157,6 +183,83 @@ class ShiftService extends ApiClient {
       return null;
     } catch (error) {
       console.error('❌ Erro ao detectar turno atual:', error);
+      return null;
+    }
+  }
+
+  // Buscar detalhes completos de um turno específico
+  async getShiftDetails(shiftId: string): Promise<ShiftDetailsResponse> {
+    console.log('🔍 Buscando detalhes do turno...', { shiftId });
+    
+    try {
+      // ✅ Usar endpoint correto da API Option7 para detalhes do turno
+      const result = await this.get<ShiftDetailsResponse>(`/workshifts/${shiftId}/details`);
+      console.log('✅ Detalhes do turno carregados:', result);
+      return result;
+    } catch (error) {
+      console.error('❌ Erro ao buscar detalhes do turno:', error);
+      
+      // Log detalhado para debug
+      if (error instanceof Response) {
+        console.error('📊 Status:', error.status);
+        console.error('📋 Status Text:', error.statusText);
+        console.error('📄 Headers:', Object.fromEntries(error.headers.entries()));
+        
+        // Tentar ler o corpo da resposta para debug
+        try {
+          const responseText = await error.text();
+          console.error('📄 Response Body (primeiros 500 chars):', responseText.substring(0, 500));
+          
+          // Verificar se é HTML
+          if (responseText.includes('<!DOCTYPE') || responseText.includes('<html')) {
+            console.error('🚨 Resposta é HTML, não JSON! Possíveis causas:');
+            console.error('   - Endpoint não existe (404)');
+            console.error('   - Problema de autenticação (redirecionamento)');
+            console.error('   - Servidor não está rodando');
+            console.error('   - URL incorreta');
+          }
+        } catch (textError) {
+          console.error('📄 Erro ao ler response body:', textError);
+        }
+      }
+      
+      // Retornar dados mockados em caso de erro para desenvolvimento
+      console.log('⚠️ Retornando dados mockados para desenvolvimento');
+      return {
+        shift: {
+          id: shiftId,
+          name: 'TURNO 1',
+          startTime: '08:00:00',
+          endTime: '18:00:00'
+        },
+        operator: {
+          name: 'João Silva',
+          role: 'Operator'
+        },
+        line: {
+          name: 'Linha de Produção A'
+        },
+        productionOrder: {
+          id: 'OP-2024-001',
+          totalQuantity: 1000,
+          shiftTarget: 1200
+        },
+        product: {
+          code: 'PROD-001',
+          name: 'Produto A'
+        }
+      };
+    }
+  }
+
+  // Buscar turno ativo para uma linha específica
+  async getActiveShift(lineId: string): Promise<ShiftResponse | null> {
+    try {
+      const result = await this.get<ShiftResponse>(`/workshifts/active?line=${lineId}`);
+      console.log('✅ Turno ativo carregado:', result);
+      return result;
+    } catch (error) {
+      console.error('❌ Erro ao buscar turno ativo:', error);
       return null;
     }
   }

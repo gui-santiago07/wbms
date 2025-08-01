@@ -54,6 +54,18 @@ interface ProductionState {
   timelineError: string | null;
   currentShiftJobs: any[];
   
+  // Novas propriedades para Production Details
+  productionDetails: {
+    turno: string;
+    ordemProducao: string;
+    quantidadeOP: number;
+    productCode: string;
+    productId: string;
+    operator: string;
+    line: string;
+    shiftTarget: number;
+  } | null;
+  
   setMachineStatus: (status: MachineStatus) => void;
   setView: (view: ViewState) => void;
   fetchLiveData: () => Promise<void>;
@@ -90,6 +102,9 @@ interface ProductionState {
   fetchTimelineData: () => Promise<void>;
   formatTime: (seconds: number) => string;
   loadAvailableProducts: () => Promise<void>;
+  
+  // Novo método para carregar Production Details
+  loadProductionDetails: (shiftId?: string) => Promise<void>;
 }
 
 export const useProductionStore = create<ProductionState>()(
@@ -159,6 +174,9 @@ export const useProductionStore = create<ProductionState>()(
   timelineLoading: false,
   timelineError: null,
   currentShiftJobs: [],
+  
+  // Production Details inicial
+  productionDetails: null,
 
     setMachineStatus: (status: MachineStatus) => {
     const currentState = get();
@@ -241,15 +259,21 @@ export const useProductionStore = create<ProductionState>()(
       // 1. Detectar turno atual
       await get().loadRealShifts();
       
-      // 2. Buscar timesheet ativo
+      // 2. Carregar Production Details do turno atual
+      const currentShift = get().currentShift;
+      if (currentShift?.id) {
+        await get().loadProductionDetails(currentShift.id);
+      }
+      
+      // 3. Buscar timesheet ativo
       const activeTimesheet = await get().timesheetService.getActiveTimesheet(deviceSettings.lineId);
       
       if (activeTimesheet) {
-        // 3. Carregar eventos da timeline
+        // 4. Carregar eventos da timeline
         const timelineEvents = await get().timesheetService.getTimelineEvents(activeTimesheet.shift_number_key.toString());
         set({ timelineEvents });
         
-        // 4. Carregar jobs do turno
+        // 5. Carregar jobs do turno
         const shiftJobs = await get().timesheetService.getShiftJobs(activeTimesheet.shift_number_key.toString());
         set({ currentShiftJobs: shiftJobs });
         
@@ -263,7 +287,7 @@ export const useProductionStore = create<ProductionState>()(
         set({ timelineEvents: [], currentShiftJobs: [] });
       }
 
-      // 5. Carregar dados em tempo real
+      // 6. Carregar dados em tempo real
       await get().fetchLiveData();
       
       // console.log('🏪 Store: Dashboard inicializado com sucesso!');
@@ -728,17 +752,31 @@ export const useProductionStore = create<ProductionState>()(
 
   // Implementações dos novos métodos para API real
   loadRealProductionOrders: async () => {
-    const { jobsService } = get();
+    const { jobsService, currentShift } = get();
     set({ isLoading: true, error: null });
     
     try {
-      const jobs = await jobsService.getCurrentShiftJobs();
+      if (!currentShift?.shiftNumberKey) {
+        throw new Error('Turno atual não encontrado');
+      }
+      
+      const jobs = await jobsService.getJobsByShift(currentShift.shiftNumberKey.toString());
       const productionOrders: ProductionOrder[] = [];
       
       for (const job of jobs) {
-        const product = await jobsService.getProductByPartId(job.part_id);
-        const order = jobsService.convertJobToProductionOrder(job, product || undefined);
-        productionOrders.push(order);
+        const products = await jobsService.getProductsForJob(job);
+        const product = products[0]; // Usar primeiro produto encontrado
+        
+        if (product) {
+          const order: ProductionOrder = {
+            id: job.job_number_key.toString(),
+            name: `OP-${job.job_number_key}`,
+            product: product.product,
+            quantity: job.good_count,
+            dueDate: new Date().toISOString().split('T')[0] // Data atual como fallback
+          };
+          productionOrders.push(order);
+        }
       }
       
       set({ productionOrders, isLoading: false });
@@ -753,19 +791,33 @@ export const useProductionStore = create<ProductionState>()(
   },
   
   loadCurrentShiftJobs: async () => {
-    const { jobsService } = get();
+    const { jobsService, currentShift } = get();
     set({ isLoading: true, error: null });
     
     try {
-      const jobs = await jobsService.getCurrentShiftJobs();
+      if (!currentShift?.shiftNumberKey) {
+        throw new Error('Turno atual não encontrado');
+      }
+      
+      const jobs = await jobsService.getJobsByShift(currentShift.shiftNumberKey.toString());
       // console.log('🔄 Store: Jobs do turno atual carregados:', jobs);
       
       // Converter para ProductionOrders
       const productionOrders: ProductionOrder[] = [];
       for (const job of jobs) {
-        const product = await jobsService.getProductByPartId(job.part_id);
-        const order = jobsService.convertJobToProductionOrder(job, product || undefined);
-        productionOrders.push(order);
+        const products = await jobsService.getProductsForJob(job);
+        const product = products[0]; // Usar primeiro produto encontrado
+        
+        if (product) {
+          const order: ProductionOrder = {
+            id: job.job_number_key.toString(),
+            name: `OP-${job.job_number_key}`,
+            product: product.product,
+            quantity: job.good_count,
+            dueDate: new Date().toISOString().split('T')[0] // Data atual como fallback
+          };
+          productionOrders.push(order);
+        }
       }
       
       set({ productionOrders, isLoading: false });
@@ -779,13 +831,17 @@ export const useProductionStore = create<ProductionState>()(
   },
   
   loadJobProducts: async (jobId: string) => {
-    const { jobsService } = get();
+    const { jobsService, currentShift } = get();
     set({ isLoading: true, error: null });
     
     try {
+      if (!currentShift?.shiftNumberKey) {
+        throw new Error('Turno atual não encontrado');
+      }
+      
       // Buscar job específico
-      const jobs = await jobsService.getCurrentShiftJobs();
-      const job = jobs.find(j => j.job_number_key.toString() === jobId);
+      const jobs = await jobsService.getJobsByShift(currentShift.shiftNumberKey.toString());
+      const job = jobs.find((j: Job) => j.job_number_key.toString() === jobId);
       
       if (job) {
         const products = await jobsService.getProductsForJob(job);
@@ -1082,6 +1138,64 @@ export const useProductionStore = create<ProductionState>()(
       // console.error('❌ Store: Erro ao buscar dados da timeline (tratado silenciosamente):', error);
       // Não definir erro no estado - tratamento silencioso
       set({ timelineLoading: false });
+    }
+  },
+
+  // Novo método para carregar Production Details
+  loadProductionDetails: async (shiftId?: string) => {
+    const { shiftService } = get();
+    const { deviceSettings } = useDeviceSettingsStore.getState();
+    
+    console.log('🔍 Store: Carregando Production Details...', { shiftId });
+    
+    try {
+      if (!deviceSettings.isConfigured) {
+        console.log('⚠️ Dispositivo não configurado, não é possível carregar Production Details');
+        set({ productionDetails: null });
+        return;
+      }
+
+      // Se não foi fornecido shiftId, usar o turno atual ou buscar turno ativo
+      let targetShiftId = shiftId;
+      if (!targetShiftId) {
+        const currentShift = get().currentShift;
+        if (currentShift) {
+          targetShiftId = currentShift.id;
+        } else {
+          // Buscar turno ativo para a linha
+          const activeShift = await shiftService.getActiveShift(deviceSettings.lineId);
+          if (activeShift) {
+            targetShiftId = activeShift.id;
+          } else {
+            console.log('⚠️ Nenhum turno ativo encontrado');
+            set({ productionDetails: null });
+            return;
+          }
+        }
+      }
+
+      // Buscar detalhes do turno
+      const shiftDetails = await shiftService.getShiftDetails(targetShiftId);
+      
+      // Mapear dados conforme o guia fornecido
+      const productionDetails = {
+        turno: shiftDetails.shift.name,
+        ordemProducao: shiftDetails.productionOrder.id,
+        quantidadeOP: shiftDetails.productionOrder.totalQuantity,
+        productCode: shiftDetails.product.code,
+        productId: shiftDetails.product.name,
+        operator: shiftDetails.operator.name,
+        line: shiftDetails.line.name,
+        shiftTarget: shiftDetails.productionOrder.shiftTarget
+      };
+      
+      set({ productionDetails });
+      console.log('✅ Store: Production Details carregados:', productionDetails);
+      
+    } catch (error) {
+      console.error('❌ Store: Erro ao carregar Production Details (tratado silenciosamente):', error);
+      // Não definir erro no estado - tratamento silencioso
+      set({ productionDetails: null });
     }
   },
     }),

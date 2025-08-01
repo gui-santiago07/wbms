@@ -1,22 +1,37 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useClock } from '../../../hooks/useClock';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useProductionStore } from '../../../store/useProductionStore';
+import { useActiveShiftDetection } from '../../../hooks/useActiveShiftDetection';
+import { useLineSelection } from '../../../hooks/useLineSelection';
 import ShiftModal from '../modals/ShiftModal';
+import LineSelectionModal from '../modals/LineSelectionModal';
 import StatusDisplay from './StatusDisplay';
 
 const Header: React.FC = () => {
   const currentTime = useClock();
   const { user, logout } = useAuth();
   const { currentShift } = useProductionStore();
+  const { currentShift: activeShift, isDetecting } = useActiveShiftDetection();
+  const { isModalOpen, closeModal, confirmLineSelection, shouldShowModal } = useLineSelection();
   const [showShiftModal, setShowShiftModal] = useState(false);
+
+  // Mostrar modal de seleção de linha se necessário
+  useEffect(() => {
+    if (shouldShowModal) {
+      console.log('🔄 Dispositivo não configurado, mostrando modal de seleção de linha');
+    }
+  }, [shouldShowModal]);
 
   const handleLogout = () => {
     if (window.confirm('Tem certeza que deseja sair do sistema?')) {
       logout();
     }
   };
+
+  // Usar turno ativo detectado automaticamente ou turno atual do store
+  const displayShift = activeShift || currentShift;
 
   return (
     <header className="flex justify-between items-center py-2">
@@ -40,10 +55,30 @@ const Header: React.FC = () => {
         <div className="text-center">
           <button
             onClick={() => setShowShiftModal(true)}
-            className="text-sm font-semibold text-white hover:text-primary transition-colors cursor-pointer"
+            className="text-sm font-semibold text-white hover:text-primary transition-colors cursor-pointer flex items-center gap-2"
+            disabled={isDetecting}
           >
-            {currentShift?.name || 'Turno'}
+            {isDetecting ? (
+              <>
+                <div className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+                <span>Detectando...</span>
+              </>
+            ) : (
+              <>
+                <span>{displayShift?.name || 'Turno'}</span>
+                {activeShift && (
+                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-green-400" title="Turno detectado automaticamente">
+                    <path d="M20 6L9 17l-5-5"/>
+                  </svg>
+                )}
+              </>
+            )}
           </button>
+          {displayShift && (
+            <p className="text-xs text-muted mt-1">
+              {displayShift.startTime} - {displayShift.endTime}
+            </p>
+          )}
         </div>
         <div className="text-right">
           <p className="font-semibold text-sm text-white">
@@ -99,6 +134,13 @@ const Header: React.FC = () => {
       {showShiftModal && (
         <ShiftModal onClose={() => setShowShiftModal(false)} />
       )}
+      
+      {/* Modal de Seleção de Linha */}
+      <LineSelectionModal
+        isOpen={isModalOpen}
+        onClose={closeModal}
+        onConfirm={confirmLineSelection}
+      />
     </header>
   );
 };

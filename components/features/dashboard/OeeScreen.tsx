@@ -9,18 +9,23 @@ import SetupModal from '../modals/SetupModal';
 
 import ShiftModal from '../modals/ShiftModal';
 import ProductSelectionModal from '../modals/ProductSelectionModal';
+import LineSelectionModal from '../modals/LineSelectionModal';
 import LoadingSpinner from '../../ui/LoadingSpinner';
 import ErrorMessage from '../../ui/ErrorMessage';
 import TimeDistributionChart from './TimeDistributionChart';
 import StopReasonsList from './StopReasonsList';
 import ProductionTimeline from './ProductionTimeline';
+import ProductionDetailsCard from './ProductionDetailsCard';
 
 import { useProductionStore } from '../../../store/useProductionStore';
 import { useDeviceSettingsStore } from '../../../store/useDeviceSettingsStore';
+import { useActiveShiftDetection } from '../../../hooks/useActiveShiftDetection';
+import { useLineSelection } from '../../../hooks/useLineSelection';
 import { ViewState } from '../../../types';
 import { useLiveDataPolling } from '../../../hooks/useLiveDataPolling';
 import { useMachineControlsVisibility } from '../../../hooks/useMachineControlsVisibility';
 import { useShiftDetection } from '../../../hooks/useShiftDetection';
+import { useProductionDetails } from '../../../hooks/useProductionDetails';
 import { config } from '../../../config/environment';
 
 // Tipos para os filtros de tempo
@@ -174,6 +179,7 @@ const OeeTrendChart: React.FC = () => {
 
 const OeeView: React.FC = () => {
   const { liveMetrics, currentJob, currentShift, setShowProductSelectionModal } = useProductionStore();
+  const { productionDetails, isLoading: productionDetailsLoading } = useProductionDetails();
   const goodPartsPercent = liveMetrics.total > 0 ? (liveMetrics.good / liveMetrics.total) * 100 : 100; // Sempre 100% (sem rejeitos)
 
   // Calcular progresso da ordem de produção
@@ -282,31 +288,11 @@ const OeeView: React.FC = () => {
 
         {/* Detalhes da Produção - 1 coluna */}
         <div className="space-y-6">
-          <Card className="p-4 md:p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold text-white">Production Details</h3>
-              <span className="text-sm font-semibold text-blue-400">{currentShift?.name || 'Turno Ativo'}</span>
-            </div>
-            
-            <div className="space-y-3">
-              <div className="flex justify-between">
-                <span className="text-sm text-muted">Ordem de Produção</span>
-                <span className="text-sm font-semibold text-white">{currentJob?.orderId || 'N/A'}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-muted">Quantidade OP</span>
-                <span className="text-sm font-semibold text-white">{currentJob?.orderQuantity || 'N/A'}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-muted">Product Code</span>
-                <span className="text-sm font-semibold text-white">{currentJob?.productId || 'N/A'}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-muted">Product ID</span>
-                <span className="text-sm font-semibold text-white">{currentJob?.productName || 'N/A'}</span>
-              </div>
-            </div>
-          </Card>
+          <ProductionDetailsCard
+            productionDetails={productionDetails}
+            isLoading={productionDetailsLoading}
+            currentShiftName={currentShift?.name}
+          />
 
           <Card className="p-4 md:p-6">
             <OeeTrendChart />
@@ -322,6 +308,9 @@ const OeeView: React.FC = () => {
 
 const OeeScreen: React.FC = () => {
   const { view, setView, initializeDashboard, isLoading, error, showProductSelectionModal } = useProductionStore();
+  const { deviceSettings } = useDeviceSettingsStore();
+  const { currentShift: activeShift, updateActiveShift } = useActiveShiftDetection();
+  const { isModalOpen, closeModal, confirmLineSelection, shouldShowModal } = useLineSelection();
   
   useLiveDataPolling(3000);
 
@@ -335,8 +324,17 @@ const OeeScreen: React.FC = () => {
 
   // Inicializar dados do dashboard na primeira carga
   useEffect(() => {
-    initializeDashboard();
-  }, [initializeDashboard]);
+    if (deviceSettings.isConfigured) {
+      initializeDashboard();
+    }
+  }, [initializeDashboard, deviceSettings.isConfigured]);
+
+  // Atualizar turno ativo quando necessário
+  useEffect(() => {
+    if (deviceSettings.isConfigured && deviceSettings.lineId) {
+      updateActiveShift();
+    }
+  }, [deviceSettings.lineId, deviceSettings.isConfigured, updateActiveShift]);
 
   // Hook personalizado para visibilidade do MachineControls
   const shouldShowMachineControls = useMachineControlsVisibility();
@@ -393,6 +391,13 @@ const OeeScreen: React.FC = () => {
         
         {/* Modal de Seleção de Produto */}
         {showProductSelectionModal && <ProductSelectionModal />}
+        
+        {/* Modal de Seleção de Linha */}
+        <LineSelectionModal
+          isOpen={isModalOpen}
+          onClose={closeModal}
+          onConfirm={confirmLineSelection}
+        />
       </div>
       
       {/* Machine Controls com lógica robusta */}

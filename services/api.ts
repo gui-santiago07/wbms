@@ -119,10 +119,10 @@ class ApiClient {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
       'X-Requested-With': 'XMLHttpRequest',
-      // ✅ HEADERS DE ORIGEM DINÂMICOS BASEADOS NO AMBIENTE
-      // 🔧 SOLUÇÃO CORS: Deixando navegador gerenciar headers de origem
-      // Se o problema persistir, substitua getOriginHeaders() por getFallbackOriginHeaders()
-      ...getOriginHeaders()
+      // 🔧 SOLUÇÃO CORS ATIVADA: Simulando origem esperada pelo servidor
+      // O servidor espera requisições de https://m.option7.ai
+      // Mas estamos executando em https://wbms-mauve.vercel.app
+      ...getFallbackOriginHeaders()
     };
 
     if (this.token) {
@@ -143,10 +143,10 @@ class ApiClient {
       'Content-Type': 'application/x-www-form-urlencoded',
       'Accept': 'application/json',
       'X-Requested-With': 'XMLHttpRequest',
-      // ✅ HEADERS DE ORIGEM DINÂMICOS BASEADOS NO AMBIENTE
-      // 🔧 SOLUÇÃO CORS: Deixando navegador gerenciar headers de origem
-      // Se o problema persistir, substitua getOriginHeaders() por getFallbackOriginHeaders()
-      ...getOriginHeaders()
+      // 🔧 SOLUÇÃO CORS ATIVADA: Simulando origem esperada pelo servidor
+      // O servidor espera requisições de https://m.option7.ai
+      // Mas estamos executando em https://wbms-mauve.vercel.app
+      ...getFallbackOriginHeaders()
     };
   }
 

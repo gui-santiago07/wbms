@@ -100,7 +100,7 @@ const TimelineChart: React.FC<{
 
 const ProductionTimeline: React.FC = () => {
   const { deviceSettings } = useDeviceSettingsStore();
-  const [showFilters, setShowFilters] = useState(true);
+  const [showFilters, setShowFilters] = useState(false);
   const [filterData, setFilterData] = useState<FilterData>({
     startDate: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     endDate: new Date().toISOString().split('T')[0],
@@ -315,7 +315,7 @@ const ProductionTimeline: React.FC = () => {
 
   // Componente do Modal de Filtros (memoizado para evitar re-renders)
   const FiltersModal = memo(() => (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[10000] p-4">
       <div className="bg-surface rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-xl font-semibold text-white">Filtros da Timeline</h2>
@@ -443,7 +443,7 @@ const ProductionTimeline: React.FC = () => {
 
   // Componente do Modal de Compartilhamento (memoizado para evitar re-renders)
   const ShareModal = memo(() => (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[10000] p-4">
       <div className="bg-surface rounded-lg p-6 w-full max-w-md">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-xl font-semibold text-white">Compartilhar Timeline</h2>

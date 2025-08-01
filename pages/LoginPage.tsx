@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useDeviceSettingsStore } from '../store/useDeviceSettingsStore';
 import Card from '../components/ui/Card';
-import InitialSetupModal from '../components/features/modals/InitialSetupModal';
+import LineSelectionModal from '../components/features/modals/LineSelectionModal';
 
 const LoginPage: React.FC = () => {
   const [username, setUsername] = useState('');
@@ -11,7 +11,7 @@ const LoginPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [showInitialSetup, setShowInitialSetup] = useState(false);
+  const [showLineSelection, setShowLineSelection] = useState(false);
   
   const { login, isAuthenticated, isLoading: authLoading } = useAuth();
   const { deviceSettings } = useDeviceSettingsStore();
@@ -32,7 +32,7 @@ const LoginPage: React.FC = () => {
       if (success) {
         // Verificar se já foi configurado
         if (!deviceSettings.isConfigured) {
-          setShowInitialSetup(true);
+          setShowLineSelection(true);
         } else {
           // Redirecionar para dashboard
           navigate('/oee');
@@ -47,8 +47,9 @@ const LoginPage: React.FC = () => {
     }
   };
 
-  const handleSetupComplete = () => {
-    setShowInitialSetup(false);
+  const handleLineSelectionComplete = (line: any) => {
+    setShowLineSelection(false);
+    console.log('✅ Linha selecionada no login:', line);
     navigate('/oee');
   };
 
@@ -155,10 +156,11 @@ const LoginPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Modal de Setup Inicial */}
-      <InitialSetupModal 
-        isOpen={showInitialSetup}
-        onComplete={handleSetupComplete}
+      {/* Modal de Seleção de Linha */}
+      <LineSelectionModal 
+        isOpen={showLineSelection}
+        onClose={() => setShowLineSelection(false)}
+        onConfirm={handleLineSelectionComplete}
       />
     </>
   );
