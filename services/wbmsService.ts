@@ -46,11 +46,6 @@ class WbmsService {
     this.baseUrl = isDevelopment 
       ? '/api/wbms' 
       : 'https://www.wbms.com.br/serv/apiWbms.php';
-    
-    console.log('🔧 WbmsService inicializado:', {
-      environment: isDevelopment ? 'development' : 'production',
-      baseUrl: this.baseUrl
-    });
   }
 
   // Método privado para fazer requisições para a API WBMS
@@ -73,8 +68,6 @@ class WbmsService {
       url.searchParams.set(key, value);
     });
 
-    console.log('🚀 WBMS Request:', url.toString());
-    
     try {
       const response = await fetch(url.toString());
       
@@ -83,7 +76,6 @@ class WbmsService {
       }
       
       const data = await response.json();
-      console.log('✅ WBMS Response:', data);
       return data;
     } catch (error) {
       console.error('❌ WBMS API Error:', error);
@@ -93,11 +85,8 @@ class WbmsService {
 
   // Obter lista de equipamentos
   async getEquipments(): Promise<WbmsEquipmentResponse> {
-    console.log('🔍 Buscando equipamentos WBMS...');
-    
     try {
       const result = await this.makeWbmsRequest({ cmd: 'getEquip' });
-      console.log('✅ Equipamentos WBMS carregados:', result);
       return result;
     } catch (error) {
       console.error('❌ Erro ao buscar equipamentos WBMS:', error);
@@ -107,14 +96,11 @@ class WbmsService {
 
   // Obter dados em tempo real para um equipamento específico
   async getLiveData(equipmentId: string): Promise<WbmsLiveDataResponse> {
-    console.log('🔍 Buscando dados em tempo real WBMS...', { equipmentId });
-    
     try {
       const result = await this.makeWbmsRequest({ 
         cmd: 'getLiveData',
         equ: equipmentId
       });
-      console.log('✅ Dados em tempo real WBMS carregados:', result);
       return result;
     } catch (error) {
       console.error('❌ Erro ao buscar dados em tempo real WBMS:', error);
@@ -124,8 +110,6 @@ class WbmsService {
 
   // Obter dados históricos para um equipamento
   async getHistData(equipmentId: string, date: string, startTime: string, endTime: string): Promise<WbmsHistDataResponse> {
-    console.log('🔍 Buscando dados históricos WBMS...', { equipmentId, date, startTime, endTime });
-    
     try {
       const result = await this.makeWbmsRequest({ 
         cmd: 'getHistData',
@@ -134,7 +118,6 @@ class WbmsService {
         hini: startTime,
         hfim: endTime
       });
-      console.log('✅ Dados históricos WBMS carregados:', result);
       return result;
     } catch (error) {
       console.error('❌ Erro ao buscar dados históricos WBMS:', error);

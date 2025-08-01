@@ -16,9 +16,11 @@ import StopReasonsList from './StopReasonsList';
 import ProductionTimeline from './ProductionTimeline';
 
 import { useProductionStore } from '../../../store/useProductionStore';
+import { useDeviceSettingsStore } from '../../../store/useDeviceSettingsStore';
 import { ViewState } from '../../../types';
 import { useLiveDataPolling } from '../../../hooks/useLiveDataPolling';
 import { useMachineControlsVisibility } from '../../../hooks/useMachineControlsVisibility';
+import { useShiftDetection } from '../../../hooks/useShiftDetection';
 import { config } from '../../../config/environment';
 
 // Tipos para os filtros de tempo
@@ -254,7 +256,6 @@ const OeeView: React.FC = () => {
           {/* Timeline de Produção */}
           <Card className="p-4 md:p-6">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-base md:text-lg font-semibold text-white">Timeline de Produção</h3>
               <div className="text-sm text-muted">
                 Histórico de eventos
               </div>

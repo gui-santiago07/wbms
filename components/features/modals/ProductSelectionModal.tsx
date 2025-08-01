@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useProductionStore } from '../../../store/useProductionStore';
-import { useProductionControlStore } from '../../../store/useProductionControlStore';
 import Card from '../../ui/Card';
 import LoadingSpinner from '../../ui/LoadingSpinner';
 
@@ -9,15 +8,12 @@ const ProductSelectionModal: React.FC = () => {
     setupTypes, 
     selectProduct, 
     startProductSetup, 
-    setShowProductSelectionModal 
+    setShowProductSelectionModal,
+    availableProducts,
+    loadAvailableProducts,
+    isLoading,
+    error
   } = useProductionStore();
-  
-  const { 
-    availableProducts, 
-    loadAvailableProducts, 
-    isLoading, 
-    error 
-  } = useProductionControlStore();
   
   const [selectedSetupType, setSelectedSetupType] = useState<string>('');
   const [willHaveSetup, setWillHaveSetup] = useState(false);

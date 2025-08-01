@@ -1,6 +1,7 @@
 
 import React, { useEffect } from 'react';
 import { useProductionStore } from '../store/useProductionStore';
+import { useDeviceSettingsStore } from '../store/useDeviceSettingsStore';
 import { ViewState } from '../types';
 import Header from '../components/features/dashboard/Header';
 import KpiCard from '../components/features/dashboard/KpiCard';
@@ -12,14 +13,15 @@ import ProductionChart from '../components/features/dashboard/ProductionChart';
 import MachineControls from '../components/features/dashboard/MachineControls';
 import StopReasonModal from '../components/features/modals/StopReasonModal';
 import SetupModal from '../components/features/modals/SetupModal';
-
 import ShiftModal from '../components/features/modals/ShiftModal';
 import { useLiveDataPolling } from '../hooks/useLiveDataPolling';
 import { useMachineControlsVisibility } from '../hooks/useMachineControlsVisibility';
+import { useShiftDetection } from '../hooks/useShiftDetection';
 import Card from '../components/ui/Card';
 import Sidebar from '../components/features/dashboard/Sidebar';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import ErrorMessage from '../components/ui/ErrorMessage';
+import DebugPanel from '../components/ui/DebugPanel';
 import { config } from '../config/environment';
 
 const DashboardView: React.FC = () => {
@@ -28,6 +30,9 @@ const DashboardView: React.FC = () => {
 
   return (
     <div className="space-y-3">
+      {/* Debug Panel - apenas em desenvolvimento */}
+      {process.env.NODE_ENV === 'development' && <DebugPanel />}
+      
        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         {/* First Column */}
         <div className="lg:col-span-2 space-y-3">
@@ -67,9 +72,10 @@ const DashboardView: React.FC = () => {
   );
 };
 
-
 const DashboardPage: React.FC = () => {
   const { view, setView, initializeDashboard, isLoading, error, currentShift } = useProductionStore();
+  const { deviceSettings } = useDeviceSettingsStore();
+  const { currentShift: detectedShift, isLoading: shiftLoading } = useShiftDetection();
   
   useLiveDataPolling(config.pollingInterval);
 
@@ -91,9 +97,55 @@ const DashboardPage: React.FC = () => {
 
   // Debug: verificar renderização do MachineControls
   useEffect(() => {
-    console.log('🎯 DashboardPage: Renderizando MachineControls');
-    console.log('🎯 DashboardPage: View atual:', view);
+    // console.log('🎯 DashboardPage: Renderizando MachineControls');
+    // console.log('🎯 DashboardPage: View atual:', view);
   }, [view]);
+
+  // Verificar se dispositivo está configurado
+  if (!deviceSettings.isConfigured) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <Card className="text-center p-8 max-w-md">
+          <div className="text-6xl mb-4">⚙️</div>
+          <h2 className="text-2xl font-bold text-white mb-2">
+            Dispositivo Não Configurado
+          </h2>
+          <p className="text-gray-300 mb-4">
+            É necessário configurar o dispositivo antes de usar o sistema.
+          </p>
+          <button
+            onClick={() => window.location.href = '/login'}
+            className="bg-primary text-white px-6 py-2 rounded-lg hover:bg-primary/80"
+          >
+            Ir para Login
+          </button>
+        </Card>
+      </div>
+    );
+  }
+
+  // Mostrar mensagem se não há turno ativo
+  if (!shiftLoading && !detectedShift) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <Card className="text-center p-8 max-w-md">
+          <div className="text-6xl mb-4">⏰</div>
+          <h2 className="text-2xl font-bold text-white mb-2">
+            Nenhum Turno Ativo
+          </h2>
+          <p className="text-gray-300 mb-4">
+            Não há turnos ativos no momento. Verifique os horários de trabalho.
+          </p>
+          <button
+            onClick={() => window.location.reload()}
+            className="bg-primary text-white px-6 py-2 rounded-lg hover:bg-primary/80"
+          >
+            Verificar Novamente
+          </button>
+        </Card>
+      </div>
+    );
+  }
 
   const renderView = () => {
     switch (view) {
@@ -103,7 +155,6 @@ const DashboardPage: React.FC = () => {
         return <StopReasonModal />;
       case ViewState.SETUP:
         return <SetupModal />;
-
       case ViewState.SHIFT_MODAL:
         return <ShiftModal onClose={() => setView(ViewState.DASHBOARD)} />;
       default:
@@ -122,7 +173,7 @@ const DashboardPage: React.FC = () => {
   }
 
   // Mostrar loading durante inicialização
-  if (isLoading) {
+  if (isLoading || shiftLoading) {
     return (
       <div className="p-4 sm:p-6 lg:p-8 bg-background min-h-screen ml-16 flex items-center justify-center">
         <LoadingSpinner size="lg" />

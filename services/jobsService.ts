@@ -1,100 +1,8 @@
 import ApiClient from './api';
 import { Job, ApiProduct, ApiShift, ProductFilter } from '../types';
 
-// Dados mock para desenvolvimento/fallback
-const MOCK_SHIFTS: ApiShift[] = [
-  {
-    shift_number_key: 'SHIFT001',
-    shift_name: 'Turno Manhã',
-    start_time: '06:00:00',
-    end_time: '14:00:00',
-    is_active: true
-  },
-  {
-    shift_number_key: 'SHIFT002', 
-    shift_name: 'Turno Tarde',
-    start_time: '14:00:00',
-    end_time: '22:00:00',
-    is_active: false
-  },
-  {
-    shift_number_key: 'SHIFT003',
-    shift_name: 'Turno Noite', 
-    start_time: '22:00:00',
-    end_time: '06:00:00',
-    is_active: false
-  }
-];
-
-const MOCK_JOBS: Job[] = [
-  {
-    job_number_key: 1001,
-    shift_number_key: 'SHIFT001',
-    part_id: 'PROD001',
-    start_time: '2024-01-15 06:00:00',
-    end_time: '2024-01-15 14:00:00',
-    total_count: 1000,
-    good_count: 980,
-    reject_count: 20,
-    asset_id: 'LINE001',
-    sector: 'SETOR_A',
-    plant: 'PLANTA_1'
-  },
-  {
-    job_number_key: 1002,
-    shift_number_key: 'SHIFT001',
-    part_id: 'PROD002',
-    start_time: '2024-01-15 06:00:00',
-    end_time: '2024-01-15 14:00:00',
-    total_count: 500,
-    good_count: 485,
-    reject_count: 15,
-    asset_id: 'LINE001',
-    sector: 'SETOR_A',
-    plant: 'PLANTA_1'
-  },
-  {
-    job_number_key: 1003,
-    shift_number_key: 'SHIFT001',
-    part_id: 'PROD003',
-    start_time: '2024-01-15 06:00:00',
-    end_time: '2024-01-15 14:00:00',
-    total_count: 750,
-    good_count: 720,
-    reject_count: 30,
-    asset_id: 'LINE002',
-    sector: 'SETOR_B',
-    plant: 'PLANTA_1'
-  }
-];
-
-const MOCK_PRODUCTS: ApiProduct[] = [
-  {
-    product_key: 'PROD001',
-    product: 'Componente Eletrônico A',
-    internal_code: 'SKU001',
-    units_per_package: 50,
-    client_line_key: 'LINE001'
-  },
-  {
-    product_key: 'PROD002', 
-    product: 'Resistor 220Ω',
-    internal_code: 'SKU002',
-    units_per_package: 100,
-    client_line_key: 'LINE001'
-  },
-  {
-    product_key: 'PROD003',
-    product: 'Capacitor 100μF',
-    internal_code: 'SKU003', 
-    units_per_package: 25,
-    client_line_key: 'LINE002'
-  }
-];
-
 class JobsService {
   private apiClient: ApiClient;
-  private useMockData: boolean = false;
 
   constructor() {
     this.apiClient = new ApiClient();
@@ -105,31 +13,26 @@ class JobsService {
    */
   async getShifts(): Promise<ApiShift[]> {
     try {
-      const response = await this.apiClient.get<ApiShift[]>('/listar-turnos');
-      this.useMockData = false;
+      const response = await this.apiClient.get<ApiShift[]>('/workshifts');
+      console.log('✅ Turnos carregados da API:', response);
       return response;
     } catch (error) {
-      console.warn('🔄 API não disponível, usando dados mock para turnos');
-      this.useMockData = true;
-      return MOCK_SHIFTS;
+      console.error('❌ Erro ao buscar turnos:', error);
+      throw new Error(`Falha ao carregar turnos: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
     }
   }
 
   /**
-   * Lista jobs por turno
+   * Lista jobs de um turno específico
    */
   async getJobsByShift(shiftNumberKey: string): Promise<Job[]> {
     try {
-      if (this.useMockData) {
-        console.log('📦 Usando dados mock para jobs do turno:', shiftNumberKey);
-        return MOCK_JOBS.filter(job => job.shift_number_key === shiftNumberKey);
-      }
-      
-      const response = await this.apiClient.get<Job[]>(`/jobs/${shiftNumberKey}`);
+      const response = await this.apiClient.get<Job[]>(`/jobs?shift_number_key=${shiftNumberKey}`);
+      console.log('✅ Jobs do turno carregados:', response);
       return response;
     } catch (error) {
-      console.warn('🔄 API não disponível, usando dados mock para jobs');
-      return MOCK_JOBS.filter(job => job.shift_number_key === shiftNumberKey);
+      console.error('❌ Erro ao buscar jobs do turno:', error);
+      throw new Error(`Falha ao carregar jobs: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
     }
   }
 
@@ -138,16 +41,12 @@ class JobsService {
    */
   async getProducts(): Promise<ApiProduct[]> {
     try {
-      if (this.useMockData) {
-        console.log('📦 Usando dados mock para produtos');
-        return MOCK_PRODUCTS;
-      }
-      
       const response = await this.apiClient.get<ApiProduct[]>('/products');
+      console.log('✅ Produtos carregados da API:', response);
       return response;
     } catch (error) {
-      console.warn('🔄 API não disponível, usando dados mock para produtos');
-      return MOCK_PRODUCTS;
+      console.error('❌ Erro ao buscar produtos:', error);
+      throw new Error(`Falha ao carregar produtos: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
     }
   }
 
@@ -156,37 +55,12 @@ class JobsService {
    */
   async getFilteredProducts(filter: ProductFilter): Promise<ApiProduct[]> {
     try {
-      if (this.useMockData) {
-        console.log('📦 Usando dados mock para produtos filtrados:', filter);
-        // Simular filtro nos dados mock
-        return MOCK_PRODUCTS.filter(product => {
-          // Buscar job relacionado para aplicar filtros
-          const relatedJob = MOCK_JOBS.find(job => job.part_id === product.product_key);
-          if (!relatedJob) return false;
-          
-          const matchesPlant = filter.plantas.length === 0 || filter.plantas.includes(relatedJob.plant);
-          const matchesSector = filter.setores.length === 0 || filter.setores.includes(relatedJob.sector);
-          const matchesLine = filter.linhas.length === 0 || filter.linhas.includes(relatedJob.asset_id);
-          
-          return matchesPlant && matchesSector && matchesLine;
-        });
-      }
-      
       const response = await this.apiClient.post<ApiProduct[]>('/products', filter);
+      console.log('✅ Produtos filtrados carregados:', response);
       return response;
     } catch (error) {
-      console.warn('🔄 API não disponível, usando dados mock para produtos filtrados');
-      // Simular filtro nos dados mock
-      return MOCK_PRODUCTS.filter(product => {
-        const relatedJob = MOCK_JOBS.find(job => job.part_id === product.product_key);
-        if (!relatedJob) return false;
-        
-        const matchesPlant = filter.plantas.length === 0 || filter.plantas.includes(relatedJob.plant);
-        const matchesSector = filter.setores.length === 0 || filter.setores.includes(relatedJob.sector); 
-        const matchesLine = filter.linhas.length === 0 || filter.linhas.includes(relatedJob.asset_id);
-        
-        return matchesPlant && matchesSector && matchesLine;
-      });
+      console.error('❌ Erro ao buscar produtos filtrados:', error);
+      throw new Error(`Falha ao carregar produtos filtrados: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
     }
   }
 
@@ -196,112 +70,124 @@ class JobsService {
   async getProductsForJob(job: Job): Promise<ApiProduct[]> {
     const filter: ProductFilter = {
       plantas: [job.plant],
-      setores: [job.sector],
-      linhas: [job.asset_id],
+      setores: job.sector ? [job.sector] : [],
+      linhas: job.asset_id ? [job.asset_id] : [],
       useIds: true
     };
-
+    
     return this.getFilteredProducts(filter);
   }
 
   /**
-   * Busca produto específico por part_id
+   * Cria um novo job
    */
-  async getProductByPartId(partId: string): Promise<ApiProduct | null> {
+  async createJob(jobData: {
+    shift_number_key: string;
+    part_id: string;
+    start_time: string;
+    end_time: string;
+    good_count: number;
+    total_count: number;
+    reject_count: number;
+  }): Promise<Job> {
     try {
-      const products = await this.getProducts();
-      return products.find(p => p.product_key === partId) || null;
+      const response = await this.apiClient.post<Job>('/jobs', jobData);
+      console.log('✅ Job criado:', response);
+      return response;
     } catch (error) {
-      console.error('Erro ao buscar produto por part_id:', error);
-      return null;
+      console.error('❌ Erro ao criar job:', error);
+      throw new Error(`Falha ao criar job: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
     }
   }
 
   /**
-   * Converte Job da API para ProductionOrder usado na interface
+   * Atualiza um job existente
    */
-  convertJobToProductionOrder(job: Job, product?: ApiProduct): {
-    id: string;
-    name: string;
-    product: string;
-    quantity: number;
-    dueDate: string;
-  } {
-    const startDate = new Date(job.start_time);
-    const endDate = new Date(job.end_time);
-    
-    return {
-      id: job.job_number_key.toString(),
-      name: `Job ${job.job_number_key}`,
-      product: product?.product || job.part_id,
-      quantity: job.total_count,
-      dueDate: endDate.toLocaleDateString('pt-BR')
-    };
-  }
-
-  /**
-   * Converte Job da API para CurrentJob usado na store
-   */
-  convertJobToCurrentJob(job: Job, product?: ApiProduct): {
-    orderId: string;
-    orderQuantity: number;
-    productId: string;
-    productName: string;
-  } {
-    return {
-      orderId: job.job_number_key.toString(),
-      orderQuantity: job.total_count,
-      productId: job.part_id,
-      productName: product?.product || job.part_id
-    };
-  }
-
-  /**
-   * Busca turno ativo atual
-   */
-  async getCurrentShift(): Promise<ApiShift | null> {
+  async updateJob(jobId: string, jobData: Partial<Job>): Promise<Job> {
     try {
-      const shifts = await this.getShifts();
-      return shifts.find(shift => shift.is_active) || shifts[0] || null;
+      const response = await this.apiClient.patch<Job>(`/jobs/${jobId}`, jobData);
+      console.log('✅ Job atualizado:', response);
+      return response;
     } catch (error) {
-      console.error('Erro ao buscar turno atual:', error);
-      return null;
+      console.error('❌ Erro ao atualizar job:', error);
+      throw new Error(`Falha ao atualizar job: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
     }
   }
 
   /**
-   * Busca jobs do turno atual
+   * Finaliza um job
    */
-  async getCurrentShiftJobs(): Promise<Job[]> {
+  async finishJob(jobId: string, endTime: string): Promise<Job> {
     try {
-      const currentShift = await this.getCurrentShift();
-      if (!currentShift) {
-        console.warn('⚠️ Nenhum turno ativo encontrado, usando dados mock');
-        return MOCK_JOBS;
-      }
+      const response = await this.apiClient.patch<Job>(`/jobs/${jobId}`, {
+        end_time: endTime,
+        is_finished: true
+      });
+      console.log('✅ Job finalizado:', response);
+      return response;
+    } catch (error) {
+      console.error('❌ Erro ao finalizar job:', error);
+      throw new Error(`Falha ao finalizar job: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+    }
+  }
+
+  /**
+   * Busca jobs ativos (não finalizados)
+   */
+  async getActiveJobs(): Promise<Job[]> {
+    try {
+      const response = await this.apiClient.get<Job[]>('/jobs?is_finished=false');
+      console.log('✅ Jobs ativos carregados:', response);
+      return response;
+    } catch (error) {
+      console.error('❌ Erro ao buscar jobs ativos:', error);
+      throw new Error(`Falha ao carregar jobs ativos: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+    }
+  }
+
+  /**
+   * Busca jobs por período
+   */
+  async getJobsByPeriod(startDate: string, endDate: string): Promise<Job[]> {
+    try {
+      const response = await this.apiClient.get<Job[]>(`/jobs?start_date=${startDate}&end_date=${endDate}`);
+      console.log('✅ Jobs por período carregados:', response);
+      return response;
+    } catch (error) {
+      console.error('❌ Erro ao buscar jobs por período:', error);
+      throw new Error(`Falha ao carregar jobs por período: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+    }
+  }
+
+  /**
+   * Busca estatísticas de jobs
+   */
+  async getJobStatistics(shiftNumberKey?: string): Promise<{
+    totalJobs: number;
+    completedJobs: number;
+    activeJobs: number;
+    totalProduction: number;
+    totalRejects: number;
+    averageOEE: number;
+  }> {
+    try {
+      const endpoint = shiftNumberKey 
+        ? `/jobs/statistics?shift_number_key=${shiftNumberKey}`
+        : '/jobs/statistics';
       
-      return this.getJobsByShift(currentShift.shift_number_key);
+      const response = await this.apiClient.get<{
+        totalJobs: number;
+        completedJobs: number;
+        activeJobs: number;
+        totalProduction: number;
+        totalRejects: number;
+        averageOEE: number;
+      }>(endpoint);
+      console.log('✅ Estatísticas de jobs carregadas:', response);
+      return response;
     } catch (error) {
-      console.error('Erro ao buscar jobs do turno atual:', error);
-      console.log('🔄 Usando dados mock como fallback');
-      return MOCK_JOBS;
-    }
-  }
-
-  /**
-   * Verifica se está usando dados mock
-   */
-  isUsingMockData(): boolean {
-    return this.useMockData;
-  }
-
-  /**
-   * Força uso de dados mock (útil para desenvolvimento)
-   */
-  setUseMockData(useMock: boolean): void {
-    this.useMockData = useMock;
-    if (useMock) {
-      console.log('🧪 Modo de desenvolvimento: usando dados mock');
+      console.error('❌ Erro ao buscar estatísticas de jobs:', error);
+      throw new Error(`Falha ao carregar estatísticas: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
     }
   }
 }

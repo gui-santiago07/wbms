@@ -213,45 +213,6 @@ class DashboardService extends ApiClient {
     const targetShiftId = this.getShiftId(currentShift);
     console.log('🔍 Buscando detalhes do turno:', { currentShift: currentShift?.name, targetShiftId });
     
-    // 🚫 TEMPORARIAMENTE DESATIVADO - Rota /timesheets com erro
-    console.log('⚠️ Rota /timesheets temporariamente desativada - retornando dados mock');
-    
-    // Retornar dados mock para desenvolvimento
-    const mockDetails: ShiftDetailsResponse = {
-      shift: {
-        id: '1',
-        name: 'TURNO 1',
-        startTime: '08:00',
-        endTime: '16:00'
-      },
-      operator: {
-        id: '1',
-        name: 'João Silva',
-        role: 'Operador'
-      },
-      product: {
-        id: 'PROD001',
-        name: 'Produto A',
-        sku: 'SKU001'
-      },
-      productionOrder: {
-        id: 'OP001',
-        totalQuantity: 1000,
-        shiftTarget: 800,
-        name: 'Ordem de Produção 001',
-        dueDate: '2024-01-15'
-      },
-      line: {
-        id: '1',
-        name: 'Linha 1',
-        code: 'L1'
-      }
-    };
-    
-    console.log('✅ Detalhes do turno mock carregados:', mockDetails);
-    return mockDetails;
-    
-    /* CÓDIGO ORIGINAL COMENTADO TEMPORARIAMENTE
     try {
       // ✅ Usar endpoint correto da API Option7
       const result = await this.get<ShiftDetailsResponse>(`/timesheets/${targetShiftId}`);
@@ -261,7 +222,6 @@ class DashboardService extends ApiClient {
       console.error(`❌ Erro ao buscar detalhes do turno ${targetShiftId}:`, error);
       throw new Error(`Falha ao carregar detalhes do turno: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
     }
-    */
   }
 
   // Buscar status em tempo real
@@ -269,50 +229,6 @@ class DashboardService extends ApiClient {
     const targetShiftId = this.getShiftId(currentShift);
     console.log('📊 Buscando status do turno:', { currentShift: currentShift?.name, targetShiftId, historyRange });
     
-    // 🚫 TEMPORARIAMENTE DESATIVADO - Rota /timesheets com erro
-    console.log('⚠️ Rota /timesheets temporariamente desativada - retornando dados mock');
-    
-    // Retornar dados mock para desenvolvimento
-    const mockStatus: ShiftStatusResponse = {
-      machineStatus: 'RUNNING',
-      production: {
-        actual: 750,
-        target: 800,
-        good: 750,
-        rejects: 0
-      },
-      oee: {
-        main: 85.5,
-        overall: 85.5,
-        availability: 92.0,
-        performance: 93.0,
-        quality: 100.0
-      },
-      timeMetrics: {
-        timeInShift: 6.5,
-        totalShiftTime: 8.0,
-        avgSpeed: 115.4,
-        instantSpeed: 120.0
-      },
-      historicalPerformance: {
-        dataPoints: [
-          { timestamp: '08:00', oee: 82.0, production: 100 },
-          { timestamp: '10:00', oee: 85.0, production: 250 },
-          { timestamp: '12:00', oee: 88.0, production: 400 },
-          { timestamp: '14:00', oee: 87.0, production: 550 },
-          { timestamp: '16:00', oee: 85.5, production: 750 }
-        ]
-      },
-      productionOrderProgress: 750,
-      possibleProduction: 800,
-      timeLabels: ['08:00', '10:00', '12:00', '14:00', '16:00'],
-      trendColor: 'text-green-500'
-    };
-    
-    console.log('✅ Status do turno mock carregado:', mockStatus);
-    return mockStatus;
-    
-    /* CÓDIGO ORIGINAL COMENTADO TEMPORARIAMENTE
     try {
       // ✅ Usar endpoint correto da API Option7 - buscar jobs do timesheet
       const result = await this.get<ShiftStatusResponse>(`/timesheets/${targetShiftId}/jobs`);
@@ -322,7 +238,6 @@ class DashboardService extends ApiClient {
       console.error(`❌ Erro ao buscar status do turno ${targetShiftId}:`, error);
       throw new Error(`Falha ao carregar status em tempo real: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
     }
-    */
   }
 
   // Registrar evento (atualizado para incluir RUN)
@@ -440,14 +355,14 @@ class DashboardService extends ApiClient {
     
     return {
       total: status.production.actual,
-      good: status.production.actual, // Todas as peças são boas (sem rejeitos)
-      rejects: 0, // Zerar rejeitos
+      good: status.production.good,
+      rejects: status.production.rejects,
       oee: oeeValue,
       availability: status.oee.availability,
       performance: status.oee.performance,
-      quality: 100, // Qualidade sempre 100% (sem rejeitos)
-      productionOrderProgress: status.production.actual,
-      possibleProduction: status.production.target,
+      quality: status.oee.quality,
+      productionOrderProgress: status.productionOrderProgress || status.production.actual,
+      possibleProduction: status.possibleProduction || status.production.target,
       timeInShift: status.timeMetrics.timeInShift,
       totalShiftTime: status.timeMetrics.totalShiftTime,
       avgSpeed: status.timeMetrics.avgSpeed,
@@ -529,27 +444,6 @@ class DashboardService extends ApiClient {
     const targetShiftId = this.getShiftId(currentShift);
     console.log('📊 Service: Buscando histórico OEE para turno:', targetShiftId, 'período:', period);
     
-    // 🚫 TEMPORARIAMENTE DESATIVADO - Rota /timesheet_events com erro
-    console.log('⚠️ Rota /timesheet_events temporariamente desativada - retornando dados mock');
-    
-    // Retornar dados mock para desenvolvimento
-    const mockHistory = {
-      points: [
-        { x: 20, y: 82 },
-        { x: 40, y: 85 },
-        { x: 60, y: 88 },
-        { x: 80, y: 87 },
-        { x: 100, y: 85.5 }
-      ],
-      timeLabels: ['08:00', '10:00', '12:00', '14:00', '16:00'],
-      trend: '+3.5%',
-      trendColor: 'text-green-500'
-    };
-    
-    console.log('✅ Service: Histórico OEE mock carregado:', mockHistory);
-    return mockHistory;
-    
-    /* CÓDIGO ORIGINAL COMENTADO TEMPORARIAMENTE
     try {
       // ✅ Usar endpoint correto da API Option7 - buscar eventos do timesheet
       const result = await this.get<OeeHistoryResponse>(`/timesheet_events/${targetShiftId}`);
@@ -565,7 +459,6 @@ class DashboardService extends ApiClient {
         trendColor: 'text-gray-400'
       };
     }
-    */
   }
 
   // Novo método para obter timeline de produção
@@ -589,22 +482,6 @@ class DashboardService extends ApiClient {
     const targetShiftId = this.getShiftId(currentShift);
     console.log('📊 Service: Buscando distribuição de tempo para turno:', targetShiftId);
     
-    // 🚫 TEMPORARIAMENTE DESATIVADO - Rota /timesheets com erro
-    console.log('⚠️ Rota /timesheets temporariamente desativada - retornando dados mock');
-    
-    // Retornar dados mock para desenvolvimento
-    const mockTimeDistribution: TimeDistributionResponse['timeDistribution'] = {
-      produced: 65.5,    // 65.5% do tempo produzindo
-      stopped: 18.2,     // 18.2% do tempo parado
-      standby: 12.1,     // 12.1% do tempo em standby
-      setup: 4.2,        // 4.2% do tempo em setup
-      totalTime: 28800   // 8 horas em segundos
-    };
-    
-    console.log('✅ Service: Distribuição de tempo mock carregada:', mockTimeDistribution);
-    return mockTimeDistribution;
-    
-    /* CÓDIGO ORIGINAL COMENTADO TEMPORARIAMENTE
     try {
       // ✅ Usar endpoint correto da API Option7 - buscar detalhes do timesheet
       const result = await this.get<TimeDistributionResponse>(`/timesheets/${targetShiftId}`);
@@ -620,7 +497,6 @@ class DashboardService extends ApiClient {
         totalTime: 0
       };
     }
-    */
   }
 
   // Novo método para obter principais motivos de parada
@@ -628,57 +504,6 @@ class DashboardService extends ApiClient {
     const targetShiftId = this.getShiftId(currentShift);
     console.log('📊 Service: Buscando principais motivos de parada para turno:', targetShiftId);
     
-    // 🚫 TEMPORARIAMENTE DESATIVADO - Rota /timesheet_events com erro
-    console.log('⚠️ Rota /timesheet_events temporariamente desativada - retornando dados mock');
-    
-    // Retornar dados mock para desenvolvimento
-    const mockTopStopReasons: TopStopReasonsResponse['topStopReasons'] = [
-      {
-        id: '1',
-        code: 'P001',
-        description: 'Troca de Produto',
-        category: 'Setup',
-        totalTime: 1800, // 30 minutos
-        occurrences: 3
-      },
-      {
-        id: '2',
-        code: 'P002',
-        description: 'Manutenção Preventiva',
-        category: 'Manutenção',
-        totalTime: 1200, // 20 minutos
-        occurrences: 1
-      },
-      {
-        id: '3',
-        code: 'P003',
-        description: 'Falta de Material',
-        category: 'Logística',
-        totalTime: 900, // 15 minutos
-        occurrences: 2
-      },
-      {
-        id: '4',
-        code: 'P004',
-        description: 'Ajuste de Máquina',
-        category: 'Técnico',
-        totalTime: 600, // 10 minutos
-        occurrences: 4
-      },
-      {
-        id: '5',
-        code: 'P005',
-        description: 'Pausa para Almoço',
-        category: 'Operacional',
-        totalTime: 3600, // 1 hora
-        occurrences: 1
-      }
-    ];
-    
-    console.log('✅ Service: Principais motivos de parada mock carregados:', mockTopStopReasons);
-    return mockTopStopReasons;
-    
-    /* CÓDIGO ORIGINAL COMENTADO TEMPORARIAMENTE
     try {
       // ✅ Usar endpoint correto da API Option7 - buscar eventos do timesheet
       const result = await this.get<TopStopReasonsResponse>(`/timesheet_events/${targetShiftId}`);
@@ -688,7 +513,6 @@ class DashboardService extends ApiClient {
       console.error('❌ Service: Erro ao buscar principais motivos de parada:', error);
       return [];
     }
-    */
   }
 
   // Novo método para obter histórico de paradas
@@ -696,41 +520,6 @@ class DashboardService extends ApiClient {
     const targetShiftId = this.getShiftId(currentShift);
     console.log('📊 Service: Buscando histórico de paradas para turno:', targetShiftId);
     
-    // 🚫 TEMPORARIAMENTE DESATIVADO - Rota /timesheet_events com erro
-    console.log('⚠️ Rota /timesheet_events temporariamente desativada - retornando dados mock');
-    
-    // Retornar dados mock para desenvolvimento
-    const mockDowntimeHistory: DowntimeHistoryResponse['downtimeHistory'] = [
-      {
-        id: '1',
-        reason: 'Troca de Produto',
-        category: 'Setup',
-        startTime: '2024-01-15T08:30:00Z',
-        endTime: '2024-01-15T09:00:00Z',
-        duration: 1800
-      },
-      {
-        id: '2',
-        reason: 'Manutenção Preventiva',
-        category: 'Manutenção',
-        startTime: '2024-01-15T10:15:00Z',
-        endTime: '2024-01-15T10:35:00Z',
-        duration: 1200
-      },
-      {
-        id: '3',
-        reason: 'Falta de Material',
-        category: 'Logística',
-        startTime: '2024-01-15T11:45:00Z',
-        endTime: '2024-01-15T12:00:00Z',
-        duration: 900
-      }
-    ];
-    
-    console.log('✅ Service: Histórico de paradas mock carregado:', mockDowntimeHistory);
-    return mockDowntimeHistory;
-    
-    /* CÓDIGO ORIGINAL COMENTADO TEMPORARIAMENTE
     try {
       // ✅ Usar endpoint correto da API Option7 - buscar eventos do timesheet
       const result = await this.get<DowntimeHistoryResponse>(`/timesheet_events/${targetShiftId}`);
@@ -740,7 +529,6 @@ class DashboardService extends ApiClient {
       console.error('❌ Service: Erro ao buscar histórico de paradas:', error);
       return [];
     }
-    */
   }
 
   // Método principal para obter dados compostos do dashboard (BFF - Backend for Frontend)
@@ -748,114 +536,6 @@ class DashboardService extends ApiClient {
     const targetShiftId = this.getShiftId(currentShift);
     console.log('📊 Service: Buscando dados compostos do dashboard para turno:', targetShiftId);
     
-    // 🚫 TEMPORARIAMENTE DESATIVADO - Rota /timesheets com erro
-    console.log('⚠️ Rota /timesheets temporariamente desativada - retornando dados mock');
-    
-    // Retornar dados mock para desenvolvimento
-    const mockCompositeData: DashboardCompositeResponse = {
-      liveMetrics: {
-        total: 750,
-        good: 720,
-        rejects: 30,
-        oee: 85.5,
-        availability: 81.8,
-        performance: 93.0,
-        quality: 96.0,
-        productionOrderProgress: 750,
-        possibleProduction: 800,
-        timeInShift: 23400, // 6.5 horas em segundos
-        totalShiftTime: 28800, // 8 horas em segundos
-        avgSpeed: 115.4,
-        instantSpeed: 120.0
-      },
-      currentJob: {
-        orderId: 'OP001',
-        orderQuantity: 1000,
-        productId: 'PROD001',
-        productName: 'Produto A'
-      },
-      currentProductionLine: {
-        id: '1',
-        name: 'Linha 1',
-        code: 'L1',
-        description: 'Linha de Produção Principal',
-        isActive: true
-      },
-      currentShift: {
-        id: '1',
-        name: 'TURNO 1',
-        startTime: '2024-01-15T08:00:00Z',
-        endTime: '2024-01-15T16:00:00Z',
-        isActive: true
-      },
-      oeeHistory: {
-        points: [
-          { x: 20, y: 82 },
-          { x: 40, y: 85 },
-          { x: 60, y: 88 },
-          { x: 80, y: 87 },
-          { x: 100, y: 85.5 }
-        ],
-        timeLabels: ['08:00', '10:00', '12:00', '14:00', '16:00'],
-        trend: '+3.5%',
-        trendColor: 'text-green-500'
-      },
-      productionTimeline: [
-        { time: '08:00', status: 'PROD', count: 100, color: '#22c55e' },
-        { time: '09:00', status: 'STOP', count: 0, color: '#ef4444' },
-        { time: '10:00', status: 'PROD', count: 150, color: '#22c55e' },
-        { time: '11:00', status: 'PROD', count: 200, color: '#22c55e' },
-        { time: '12:00', status: 'STOP', count: 0, color: '#ef4444' },
-        { time: '13:00', status: 'PROD', count: 180, color: '#22c55e' },
-        { time: '14:00', status: 'PROD', count: 120, color: '#22c55e' }
-      ],
-      timeDistribution: {
-        produced: 65.5,
-        stopped: 18.2,
-        standby: 12.1,
-        setup: 4.2,
-        totalTime: 28800
-      },
-      topStopReasons: [
-        {
-          id: '1',
-          code: 'P001',
-          description: 'Troca de Produto',
-          category: 'Setup',
-          totalTime: 1800,
-          occurrences: 3
-        },
-        {
-          id: '2',
-          code: 'P002',
-          description: 'Manutenção Preventiva',
-          category: 'Manutenção',
-          totalTime: 1200,
-          occurrences: 1
-        },
-        {
-          id: '3',
-          code: 'P003',
-          description: 'Falta de Material',
-          category: 'Logística',
-          totalTime: 900,
-          occurrences: 2
-        }
-      ],
-      productionStatus: {
-        status: 'PRODUZINDO',
-        icon: '▶️',
-        color: '#22c55e',
-        producingTime: '06:30:00',
-        producingPercentage: 81.8,
-        stoppedTime: '01:30:00'
-      }
-    };
-    
-    console.log('✅ Service: Dados compostos do dashboard mock carregados:', mockCompositeData);
-    return mockCompositeData;
-    
-    /* CÓDIGO ORIGINAL COMENTADO TEMPORARIAMENTE
     try {
       // ✅ Usar endpoint correto da API Option7 - buscar dados do timesheet
       const result = await this.get<DashboardCompositeResponse>(`/timesheets/${targetShiftId}`);
@@ -865,7 +545,6 @@ class DashboardService extends ApiClient {
       console.error('❌ Service: Erro ao buscar dados compostos do dashboard:', error);
       throw error;
     }
-    */
   }
 
   // Método para obter lista de dispositivos

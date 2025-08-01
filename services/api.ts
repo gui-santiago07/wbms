@@ -4,6 +4,29 @@ import { cleanPhpSerializedString } from '../utils/stringUtils';
 // Configuração base da API
 const API_BASE_URL = config.apiBaseUrl;
 
+// Função para detectar se estamos em desenvolvimento (com proxy)
+const isDevelopmentWithProxy = (): boolean => {
+  const hostname = window.location.hostname;
+  return hostname === 'localhost' || hostname === '127.0.0.1';
+};
+
+// Função para obter headers de origem baseados no ambiente
+const getOriginHeaders = (): Partial<{ Origin: string; Referer: string }> => {
+  if (isDevelopmentWithProxy()) {
+    // Em desenvolvimento com proxy, não precisamos dos headers de origem
+    // pois o proxy do Vite já os adiciona automaticamente
+    console.log('🔧 Headers de origem: omitidos (desenvolvimento com proxy)');
+    return {};
+  } else {
+    // Em produção/staging, usar headers de origem consistentes
+    console.log('🔧 Headers de origem: aplicados (produção/staging)');
+    return {
+      'Origin': 'https://m.option7.ai',
+      'Referer': 'https://m.option7.ai/'
+    };
+  }
+};
+
 // Função para log detalhado das requisições
 const logRequest = (method: string, url: string, headers: HeadersInit, body?: any) => {
   const debugLog = (window as any).addDebugLog;
@@ -47,7 +70,7 @@ const logError = (method: string, url: string, error: any) => {
   console.groupEnd();
 };
 
-// Cliente base para requisições HTTP
+// Cliente base para requisições HTTP (CHAMADA DIRETA SEM PROXY)
 class ApiClient {
   private baseUrl: string;
   private token: string | null;
@@ -58,34 +81,36 @@ class ApiClient {
     
     const debugLog = (window as any).addDebugLog;
     if (debugLog) {
-      debugLog('info', '🔧 ApiClient inicializado', {
+      debugLog('info', '🔧 ApiClient inicializado (HEADERS PADRONIZADOS)', {
         baseUrl: this.baseUrl,
         hasToken: !!this.token,
         tokenPreview: this.token ? `${this.token.substring(0, 20)}...` : 'null'
       });
     }
     
-    console.log('🔧 ApiClient inicializado:', {
+    console.log('🔧 ApiClient inicializado (HEADERS PADRONIZADOS):', {
       baseUrl: this.baseUrl,
       hasToken: !!this.token,
       tokenPreview: this.token ? `${this.token.substring(0, 20)}...` : 'null'
     });
   }
 
-  // Headers com autenticação
+  // Headers com autenticação (padronizado com origem dinâmica)
   private getHeaders(): HeadersInit {
-    // ✅ Sempre atualizar token do localStorage antes de fazer requisição
     this.updateTokenFromStorage();
     
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'X-Requested-With': 'XMLHttpRequest',
+      // ✅ HEADERS DE ORIGEM DINÂMICOS BASEADOS NO AMBIENTE
+      ...getOriginHeaders()
     };
 
     if (this.token) {
       headers['Authorization'] = `Bearer ${this.token}`;
-      console.log('🔐 Bearer token incluído nos headers:', {
-        tokenPreview: `${this.token.substring(0, 20)}...`,
-        fullHeader: `Bearer ${this.token}`
+      console.log('🔐 Bearer token incluído:', {
+        tokenPreview: `${this.token.substring(0, 20)}...`
       });
     } else {
       console.warn('⚠️ Nenhum token encontrado para autenticação');
@@ -94,7 +119,18 @@ class ApiClient {
     return headers;
   }
 
-  // Login e obtenção de token
+  // Headers específicos para login (Content-Type diferente, origem dinâmica)
+  private getLoginHeaders(): HeadersInit {
+    return {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Accept': 'application/json',
+      'X-Requested-With': 'XMLHttpRequest',
+      // ✅ HEADERS DE ORIGEM DINÂMICOS BASEADOS NO AMBIENTE
+      ...getOriginHeaders()
+    };
+  }
+
+  // Login e obtenção de token (headers padronizados)
   async login(username: string, password: string): Promise<{ token: string; nome: string }> {
     const url = `${this.baseUrl}/user/login`;
     
@@ -103,13 +139,20 @@ class ApiClient {
     formData.append('username', username);
     formData.append('password', password);
     
-    logRequest('POST', url, { 'Content-Type': 'application/x-www-form-urlencoded' }, formData.toString());
+    console.log('🚀 === LOGIN COM HEADERS PADRONIZADOS ===');
+    console.log('URL:', url);
+    console.log('Form Data:', formData.toString());
+    console.log('=====================================');
+    
+    logRequest('POST', url, this.getLoginHeaders(), formData.toString());
     
     try {
       const response = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: formData
+        headers: this.getLoginHeaders(),
+        body: formData,
+        mode: 'cors',
+        credentials: 'omit'
       });
 
       console.log('📊 Login Response Status:', response.status);
@@ -136,13 +179,13 @@ class ApiClient {
       
       const debugLog = (window as any).addDebugLog;
       if (debugLog) {
-        debugLog('success', '🔐 Token salvo', {
+        debugLog('success', '🔐 Token salvo (HEADERS PADRONIZADOS)', {
           tokenPreview: `${data.token.substring(0, 20)}...`,
           nome: cleanPhpSerializedString(data.nome)
         });
       }
       
-      console.log('🔐 Token salvo:', {
+      console.log('🔐 Token salvo (HEADERS PADRONIZADOS):', {
         tokenPreview: `${data.token.substring(0, 20)}...`,
         nome: cleanPhpSerializedString(data.nome)
       });
@@ -177,7 +220,7 @@ class ApiClient {
 
   // Debug: mostrar informações do token atual
   debugTokenInfo(): void {
-    console.log('🔍 Debug Token Info:', {
+    console.log('🔍 Debug Token Info (HEADERS PADRONIZADOS):', {
       hasToken: !!this.token,
       tokenLength: this.token?.length || 0,
       tokenPreview: this.token ? `${this.token.substring(0, 20)}...` : 'null',
@@ -198,16 +241,24 @@ class ApiClient {
     localStorage.removeItem('user_name');
   }
 
-  // Requisição GET genérica
+  // Requisição GET genérica (headers padronizados)
   async get<T>(endpoint: string): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
     const headers = this.getHeaders();
+    
+    console.log('🚀 === GET COM HEADERS PADRONIZADOS ===');
+    console.log('URL:', url);
+    console.log('Headers:', headers);
+    console.log('====================================');
     
     logRequest('GET', url, headers);
     
     try {
       const response = await fetch(url, {
-        headers
+        method: 'GET',
+        headers,
+        mode: 'cors',
+        credentials: 'omit'
       });
 
       console.log('📊 GET Response Status:', response.status);
@@ -232,10 +283,16 @@ class ApiClient {
     }
   }
 
-  // Requisição POST genérica
+  // Requisição POST genérica (headers padronizados)
   async post<T>(endpoint: string, data: any): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
     const headers = this.getHeaders();
+    
+    console.log('🚀 === POST COM HEADERS PADRONIZADOS ===');
+    console.log('URL:', url);
+    console.log('Headers:', headers);
+    console.log('Body:', data);
+    console.log('=====================================');
     
     logRequest('POST', url, headers, data);
     
@@ -243,7 +300,9 @@ class ApiClient {
       const response = await fetch(url, {
         method: 'POST',
         headers,
-        body: JSON.stringify(data)
+        body: JSON.stringify(data),
+        mode: 'cors',
+        credentials: 'omit'
       });
 
       console.log('📊 POST Response Status:', response.status);
@@ -268,10 +327,16 @@ class ApiClient {
     }
   }
 
-  // Requisição PUT genérica
+  // Requisição PUT genérica (headers padronizados)
   async put<T>(endpoint: string, data: any): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
     const headers = this.getHeaders();
+    
+    console.log('🚀 === PUT COM HEADERS PADRONIZADOS ===');
+    console.log('URL:', url);
+    console.log('Headers:', headers);
+    console.log('Body:', data);
+    console.log('====================================');
     
     logRequest('PUT', url, headers, data);
     
@@ -279,7 +344,9 @@ class ApiClient {
       const response = await fetch(url, {
         method: 'PUT',
         headers,
-        body: JSON.stringify(data)
+        body: JSON.stringify(data),
+        mode: 'cors',
+        credentials: 'omit'
       });
 
       console.log('📊 PUT Response Status:', response.status);
@@ -304,10 +371,16 @@ class ApiClient {
     }
   }
 
-  // Requisição PATCH genérica
+  // Requisição PATCH genérica (headers padronizados)
   async patch<T>(endpoint: string, data: any): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
     const headers = this.getHeaders();
+    
+    console.log('🚀 === PATCH COM HEADERS PADRONIZADOS ===');
+    console.log('URL:', url);
+    console.log('Headers:', headers);
+    console.log('Body:', data);
+    console.log('=====================================');
     
     logRequest('PATCH', url, headers, data);
     
@@ -315,7 +388,9 @@ class ApiClient {
       const response = await fetch(url, {
         method: 'PATCH',
         headers,
-        body: JSON.stringify(data)
+        body: JSON.stringify(data),
+        mode: 'cors',
+        credentials: 'omit'
       });
 
       console.log('📊 PATCH Response Status:', response.status);
@@ -340,17 +415,24 @@ class ApiClient {
     }
   }
 
-  // Requisição DELETE genérica
+  // Requisição DELETE genérica (headers padronizados)
   async delete(endpoint: string): Promise<void> {
     const url = `${this.baseUrl}${endpoint}`;
     const headers = this.getHeaders();
+    
+    console.log('🚀 === DELETE COM HEADERS PADRONIZADOS ===');
+    console.log('URL:', url);
+    console.log('Headers:', headers);
+    console.log('======================================');
     
     logRequest('DELETE', url, headers);
     
     try {
       const response = await fetch(url, {
         method: 'DELETE',
-        headers
+        headers,
+        mode: 'cors',
+        credentials: 'omit'
       });
 
       console.log('📊 DELETE Response Status:', response.status);

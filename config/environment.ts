@@ -7,30 +7,25 @@ interface EnvironmentConfig {
 
 const environments: Record<string, EnvironmentConfig> = {
   development: {
-    apiBaseUrl: '/api', // Usar proxy local para evitar CORS
-    // apiBaseUrl: 'https://staging.option7.ai/api', // URL direta (causa CORS)
-    // apiBaseUrl: 'http://localhost:8090/api',
-    pollingInterval: 3000, // 3 segundos para desenvolvimento
+    // 🚀 VOLTAR PARA PROXY SIMPLES
+    apiBaseUrl: '/api',
+    pollingInterval: 3000,
     defaultShiftId: 'turno_1'
   },
   staging: {
     apiBaseUrl: 'https://staging.option7.ai/api',
-    pollingInterval: 5000, // 5 segundos para staging
-    defaultShiftId: 'turno_1' 
-  },
-  staging_direct: {
-    apiBaseUrl: 'https://staging.option7.ai/api',
-    pollingInterval: 5000, // 5 segundos para staging direto
+    pollingInterval: 5000,
     defaultShiftId: 'turno_1' 
   },
   production: {
     apiBaseUrl: 'https://option7.ai/api',
-    pollingInterval: 10000, // 10 segundos para produção
+    pollingInterval: 10000,
     defaultShiftId: 'turno_1'
   },
   vercel: {
-    apiBaseUrl: '/api', // URL relativa que será interceptada pelo proxy do Vercel
-    pollingInterval: 5000, // 5 segundos para Vercel
+    // 🚀 CHAMADA DIRETA SEM PROXY
+    apiBaseUrl: 'https://staging.option7.ai/api',
+    pollingInterval: 5000,
     defaultShiftId: 'turno_1'
   }
 };
@@ -45,21 +40,9 @@ const getCurrentEnvironment = (): string => {
     return envParam;
   }
 
-  // 🔧 2. PARA FORÇAR STAGING LOCALMENTE, DESCOMENTE A LINHA ABAIXO:
-  // return 'staging';
-  
-  // 🔧 2.1. PARA USAR STAGING DIRETO (SEM PROXY), DESCOMENTE A LINHA ABAIXO:
-  // return 'staging_direct';
-  
-  // 🔧 3. Usar window.location.hostname para detectar ambiente (padrão)
+  // 🔧 2. Usar window.location.hostname para detectar ambiente
   const hostname = window.location.hostname;
   if (hostname === 'localhost' || hostname === '127.0.0.1') return 'development';
-  
-  // 🔧 4. SOLUÇÃO CORS: Usar configuração específica para Vercel
-  if (hostname.includes('vercel.app')) {
-    console.log('🌍 Vercel detectado - usando proxy configurado');
-    return 'vercel';
-  }
   
   if (hostname.includes('staging')) return 'staging';
   return 'production';
@@ -78,7 +61,7 @@ export const currentEnvironment = getCurrentEnvironment();
 
 // Log da configuração atual (apenas em desenvolvimento, staging e vercel)
 if (isDevelopment || isStaging || isVercel) {
-  console.log('🔧 Configuração do ambiente:', {
+  console.log('🔧 Configuração do ambiente (SEM PROXY):', {
     environment: getCurrentEnvironment(),
     apiBaseUrl: config.apiBaseUrl,
     pollingInterval: config.pollingInterval,

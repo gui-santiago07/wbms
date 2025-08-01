@@ -1,7 +1,6 @@
 import ApiClient from './api';
 import { Shift } from '../types';
 
-// Interfaces para as respostas da API de turnos
 interface ShiftResponse {
   id: string;
   name: string;
@@ -12,10 +11,9 @@ interface ShiftResponse {
 
 interface ShiftListResponse {
   data: ShiftResponse[];
-  current_page: number;
-  per_page: number;
   total: number;
-  last_page: number;
+  page: number;
+  itemsPerPage: number;
 }
 
 class ShiftService extends ApiClient {
@@ -27,41 +25,9 @@ class ShiftService extends ApiClient {
   async getShifts(page: number = 1, itemsPerPage: number = 10): Promise<ShiftResponse[]> {
     console.log('🔍 Buscando turnos...', { page, itemsPerPage });
     
-    // 🚫 TEMPORARIAMENTE DESATIVADO - Rota /timesheets com erro
-    console.log('⚠️ Rota /timesheets temporariamente desativada - retornando dados mock');
-    
-    // Retornar dados mock para desenvolvimento
-    const mockShifts: ShiftResponse[] = [
-      {
-        id: '1',
-        name: 'TURNO 1',
-        startTime: '08:00',
-        endTime: '16:00',
-        isActive: true
-      },
-      {
-        id: '2', 
-        name: 'TURNO 2',
-        startTime: '16:00',
-        endTime: '00:00',
-        isActive: false
-      },
-      {
-        id: '3',
-        name: 'TURNO 3',
-        startTime: '00:00',
-        endTime: '08:00',
-        isActive: false
-      }
-    ];
-    
-    console.log('✅ Turnos mock carregados:', mockShifts);
-    return mockShifts;
-    
-    /* CÓDIGO ORIGINAL COMENTADO TEMPORARIAMENTE
     try {
       // ✅ Usar endpoint correto da API Option7
-      const result = await this.get<ShiftListResponse>(`/timesheets?page=${page}&itemsPerPage=${itemsPerPage}`);
+      const result = await this.get<ShiftListResponse>(`/workshifts?page=${page}&itemsPerPage=${itemsPerPage}`);
       console.log('✅ Turnos carregados:', result.data);
       return result.data;
     } catch (error) {
@@ -93,74 +59,117 @@ class ShiftService extends ApiClient {
       
       throw new Error(`Falha ao carregar turnos: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
     }
-    */
+  }
+
+  // Buscar turno específico por ID
+  async getShiftById(shiftId: string): Promise<ShiftResponse> {
+    try {
+      const result = await this.get<ShiftResponse>(`/workshifts/${shiftId}`);
+      console.log('✅ Turno carregado:', result);
+      return result;
+    } catch (error) {
+      console.error('❌ Erro ao buscar turno:', error);
+      throw new Error(`Falha ao carregar turno: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+    }
   }
 
   // Buscar turnos ativos
   async getActiveShifts(): Promise<ShiftResponse[]> {
-    console.log('🔍 Buscando turnos ativos...');
-    
     try {
-      const allShifts = await this.getShifts(1, 50); // Buscar mais para filtrar
-      const activeShifts = allShifts.filter(shift => shift.isActive);
-      console.log('✅ Turnos ativos encontrados:', activeShifts.length);
-      return activeShifts;
+      const result = await this.get<ShiftListResponse>('/workshifts?is_active=true');
+      console.log('✅ Turnos ativos carregados:', result.data);
+      return result.data;
     } catch (error) {
       console.error('❌ Erro ao buscar turnos ativos:', error);
       throw new Error(`Falha ao carregar turnos ativos: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
     }
   }
 
-  // Buscar turno específico por ID
-  async getShiftById(shiftId: string): Promise<ShiftResponse> {
-    console.log('🔍 Buscando turno específico:', shiftId);
-    
+  // Criar novo turno
+  async createShift(shiftData: {
+    name: string;
+    startTime: string;
+    endTime: string;
+    isActive?: boolean;
+  }): Promise<ShiftResponse> {
     try {
-      const result = await this.get<ShiftResponse>(`/timesheets/${shiftId}`);
-      console.log('✅ Turno específico carregado:', result);
+      const result = await this.post<ShiftResponse>('/workshifts', shiftData);
+      console.log('✅ Turno criado:', result);
       return result;
     } catch (error) {
-      console.error(`❌ Erro ao buscar turno ${shiftId}:`, error);
-      throw new Error(`Falha ao carregar turno: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+      console.error('❌ Erro ao criar turno:', error);
+      throw new Error(`Falha ao criar turno: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
     }
   }
 
-  // Verificar se há turnos ativos
-  async hasActiveShifts(): Promise<boolean> {
+  // Atualizar turno
+  async updateShift(shiftId: string, shiftData: Partial<ShiftResponse>): Promise<ShiftResponse> {
     try {
-      const activeShifts = await this.getActiveShifts();
-      return activeShifts.length > 0;
+      const result = await this.patch<ShiftResponse>(`/workshifts/${shiftId}`, shiftData);
+      console.log('✅ Turno atualizado:', result);
+      return result;
     } catch (error) {
-      console.error('❌ Erro ao verificar turnos ativos:', error);
-      return false;
+      console.error('❌ Erro ao atualizar turno:', error);
+      throw new Error(`Falha ao atualizar turno: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
     }
   }
 
-  // Obter primeiro turno ativo
-  async getFirstActiveShift(): Promise<ShiftResponse | null> {
+  // Deletar turno
+  async deleteShift(shiftId: string): Promise<void> {
     try {
-      const activeShifts = await this.getActiveShifts();
-      return activeShifts.length > 0 ? activeShifts[0] : null;
+      await this.delete(`/workshifts/${shiftId}`);
+      console.log('✅ Turno deletado:', shiftId);
     } catch (error) {
-      console.error('❌ Erro ao obter primeiro turno ativo:', error);
+      console.error('❌ Erro ao deletar turno:', error);
+      throw new Error(`Falha ao deletar turno: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+    }
+  }
+
+  // Detectar turno atual baseado no horário
+  async detectCurrentShift(): Promise<ShiftResponse | null> {
+    try {
+      const now = new Date();
+      const currentTime = now.getHours() * 60 + now.getMinutes();
+      
+      const shifts = await this.getShifts(1, 100); // Buscar todos os turnos
+      
+      const activeShift = shifts.find(shift => {
+        const [startHour, startMin] = shift.startTime.split(':').map(Number);
+        const [endHour, endMin] = shift.endTime.split(':').map(Number);
+        
+        const shiftStartMinutes = startHour * 60 + startMin;
+        const shiftEndMinutes = endHour * 60 + endMin;
+        
+        // Lidar com turnos que passam da meia-noite
+        if (shiftEndMinutes < shiftStartMinutes) {
+          return currentTime >= shiftStartMinutes || currentTime < shiftEndMinutes;
+        } else {
+          return currentTime >= shiftStartMinutes && currentTime < shiftEndMinutes;
+        }
+      });
+
+      if (activeShift) {
+        console.log('✅ Turno atual detectado:', activeShift.name);
+        return activeShift;
+      }
+
+      console.log('⚠️ Nenhum turno ativo encontrado para o horário atual');
+      return null;
+    } catch (error) {
+      console.error('❌ Erro ao detectar turno atual:', error);
       return null;
     }
   }
 
-  // Converter ShiftResponse para Shift (formato da aplicação)
-  convertToShift(shiftData: ShiftResponse): Shift {
+  // Converter ShiftResponse para Shift (formato interno)
+  convertToShift(response: ShiftResponse): Shift {
     return {
-      id: shiftData.id,
-      name: shiftData.name,
-      startTime: shiftData.startTime,
-      endTime: shiftData.endTime,
-      isActive: shiftData.isActive,
+      id: response.id,
+      name: response.name,
+      startTime: response.startTime,
+      endTime: response.endTime,
+      isActive: response.isActive
     };
-  }
-
-  // Converter lista de ShiftResponse para Shift[]
-  convertToShifts(shiftsData: ShiftResponse[]): Shift[] {
-    return shiftsData.map(shift => this.convertToShift(shift));
   }
 }
 

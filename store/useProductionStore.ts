@@ -7,7 +7,8 @@ import ShiftService from '../services/shiftService';
 import WbmsService from '../services/wbmsService';
 import Option7ApiService from '../services/option7ApiService';
 import JobsService from '../services/jobsService';
-import TimesheetService, { TimelineEvent } from '../services/timesheetService';
+import TimesheetService from '../services/timesheetService';
+import { useDeviceSettingsStore } from './useDeviceSettingsStore';
 
 interface ProductionState {
   machineStatus: MachineStatus;
@@ -48,9 +49,10 @@ interface ProductionState {
   showProductSelectionModal: boolean;
   
   // Timeline de produção
-  timelineEvents: TimelineEvent[];
+  timelineEvents: any[];
   timelineLoading: boolean;
   timelineError: string | null;
+  currentShiftJobs: any[];
   
   setMachineStatus: (status: MachineStatus) => void;
   setView: (view: ViewState) => void;
@@ -87,6 +89,7 @@ interface ProductionState {
   fetchStopReasons: () => Promise<void>;
   fetchTimelineData: () => Promise<void>;
   formatTime: (seconds: number) => string;
+  loadAvailableProducts: () => Promise<void>;
 }
 
 export const useProductionStore = create<ProductionState>()(
@@ -155,44 +158,67 @@ export const useProductionStore = create<ProductionState>()(
   timelineEvents: [],
   timelineLoading: false,
   timelineError: null,
+  currentShiftJobs: [],
 
     setMachineStatus: (status: MachineStatus) => {
+    const currentState = get();
+    const previousStatus = currentState.machineStatus;
+    
     set({ machineStatus: status });
-    if (status === MachineStatus.DOWN) {
-        const currentView = get().view;
-        const newEventId = `evt${Date.now()}`;
-        set({ 
-            previousView: currentView,
-            view: ViewState.STOP_REASON, 
-            currentDowntimeEventId: newEventId,
-            downtimeHistory: [
-                { id: newEventId, operator: 'Operador', startDate: new Date().toISOString().split('T')[0], startTime: new Date().toLocaleTimeString(), endDate: null, endTime: null, totalTime: null, reason: 'Aguardando motivo...' },
-                ...get().downtimeHistory
-            ]
-        });
+    
+    // Verificar se houve transição para parada (de status ativo para DOWN)
+    const isTransitionToDown = status === MachineStatus.DOWN && 
+      previousStatus !== MachineStatus.DOWN && 
+      [MachineStatus.RUNNING, MachineStatus.PAUSED, MachineStatus.SETUP, MachineStatus.STANDBY].includes(previousStatus);
+    
+    if (isTransitionToDown) {
+      // console.log('🔄 Store: Transição para parada via setMachineStatus, mostrando modal de motivo...', {
+      //   previousStatus,
+      //   newStatus: status
+      // });
+      const currentView = currentState.view;
+      const newEventId = `evt${Date.now()}`;
+      set({ 
+        previousView: currentView,
+        view: ViewState.STOP_REASON, 
+        currentDowntimeEventId: newEventId,
+        downtimeHistory: [
+          { 
+            id: newEventId, 
+            operator: 'Operador', 
+            startDate: new Date().toISOString().split('T')[0], 
+            startTime: new Date().toLocaleTimeString(), 
+            endDate: null, 
+            endTime: null, 
+            totalTime: null, 
+            reason: 'Aguardando motivo...' 
+          },
+          ...currentState.downtimeHistory
+        ]
+      });
     } else if (status === MachineStatus.STANDBY) {
-        set({ view: ViewState.DASHBOARD });
+      set({ view: ViewState.DASHBOARD });
     } else if (status === MachineStatus.RUNNING) {
-        const currentView = get().view;
-        if (currentView === ViewState.STOP_REASON) {
-            // Retorna para a view anterior (DASHBOARD ou OEE)
-            const previousView = get().previousView || ViewState.DASHBOARD;
-            set({ view: previousView, previousView: null });
-        }
+      const currentView = get().view;
+      if (currentView === ViewState.STOP_REASON) {
+        // Retorna para a view anterior (DASHBOARD ou OEE)
+        const previousView = get().previousView || ViewState.DASHBOARD;
+        set({ view: previousView, previousView: null });
+      }
     }
   },
   
   setView: (view: ViewState) => {
     const currentView = get().view;
-    console.log('🔄 View alterada:', { 
-      from: currentView, 
-      to: view, 
-      timestamp: new Date().toISOString() 
-    });
+    // console.log('🔄 View alterada:', { 
+    //   from: currentView, 
+    //   to: view, 
+    //   timestamp: new Date().toISOString() 
+    // });
     
     // Garantir que sempre temos uma view válida
     if (!Object.values(ViewState).includes(view)) {
-      console.warn('⚠️ View inválida detectada, usando DASHBOARD como fallback');
+      // console.warn('⚠️ View inválida detectada, usando DASHBOARD como fallback');
       view = ViewState.DASHBOARD;
     }
     
@@ -200,32 +226,47 @@ export const useProductionStore = create<ProductionState>()(
   },
 
   initializeDashboard: async () => {
-    console.log('🏪 Store: Iniciando dashboard...');
+    // console.log('🏪 Store: Iniciando dashboard...');
     set({ isLoading: true, error: null });
     
     try {
-      // Primeiro, carregar turnos
-      console.log('🏪 Store: Carregando turnos...');
+      const deviceSettings = useDeviceSettingsStore.getState().deviceSettings;
+      
+      if (!deviceSettings.isConfigured) {
+        // console.log('⚠️ Dispositivo não configurado');
+        set({ isLoading: false });
+        return;
+      }
+
+      // 1. Detectar turno atual
       await get().loadRealShifts();
       
-      // Obter o turno atual
-      const { currentShift } = get();
-      console.log('🏪 Store: Turno atual:', currentShift?.name);
+      // 2. Buscar timesheet ativo
+      const activeTimesheet = await get().timesheetService.getActiveTimesheet(deviceSettings.lineId);
       
-      // Se temos turno, carregar dados compostos do dashboard
-      if (currentShift) {
-        console.log('🏪 Store: Carregando dados compostos do dashboard...');
-        await get().fetchDashboardComposite();
+      if (activeTimesheet) {
+        // 3. Carregar eventos da timeline
+        const timelineEvents = await get().timesheetService.getTimelineEvents(activeTimesheet.shift_number_key.toString());
+        set({ timelineEvents });
         
-        // Carregar dados da timeline de produção
-        console.log('🏪 Store: Carregando timeline de produção...');
-        await get().fetchTimelineData();
+        // 4. Carregar jobs do turno
+        const shiftJobs = await get().timesheetService.getShiftJobs(activeTimesheet.shift_number_key.toString());
+        set({ currentShiftJobs: shiftJobs });
+        
+        // console.log('✅ Dados do timesheet carregados:', {
+        //   timesheet: activeTimesheet.shift_number_key,
+        //   events: timelineEvents.length,
+        //   jobs: shiftJobs.length
+        // });
       } else {
-        console.log('🏪 Store: Turno não definido');
-        set({ isLoading: false });
+        // console.log('⚠️ Nenhum timesheet ativo encontrado');
+        set({ timelineEvents: [], currentShiftJobs: [] });
       }
+
+      // 5. Carregar dados em tempo real
+      await get().fetchLiveData();
       
-      console.log('🏪 Store: Dashboard inicializado com sucesso!');
+      // console.log('🏪 Store: Dashboard inicializado com sucesso!');
     } catch (error) {
       console.error('🏪 Store: Erro ao inicializar dashboard (tratado silenciosamente):', error);
       // Não definir erro no estado - tratamento silencioso
@@ -235,13 +276,13 @@ export const useProductionStore = create<ProductionState>()(
 
   fetchLiveData: async () => {
     const { wbmsService, currentShift } = get();
-    console.log('🔄 Store: Buscando dados em tempo real WBMS...', { 
-      currentShift: currentShift?.name
-    });
+    // console.log('🔄 Store: Buscando dados em tempo real WBMS...', { 
+    //   currentShift: currentShift?.name
+    // });
     
     // Só fazer chamadas se há um turno atual
     if (!currentShift) {
-      console.log('🔄 Store: Turno não definido, pulando busca de dados');
+      // console.log('🔄 Store: Turno não definido, pulando busca de dados');
       return;
     }
     
@@ -253,18 +294,18 @@ export const useProductionStore = create<ProductionState>()(
       const liveMetrics = wbmsService.convertToLiveMetrics(liveData);
       const machineStatus = wbmsService.getMachineStatus(liveData);
       
-      console.log('🔄 Store: Dados em tempo real recebidos:', { liveData, liveMetrics, machineStatus });
+      // console.log('🔄 Store: Dados em tempo real recebidos:', { liveData, liveMetrics, machineStatus });
       
       // Só atualizar o status da máquina se não há um evento de parada em andamento
       const currentState = get();
       const shouldUpdateMachineStatus = !currentState.currentDowntimeEventId || machineStatus !== 'DOWN';
       
-      console.log('🔄 Store: Verificando atualização de status:', {
-        currentMachineStatus: currentState.machineStatus,
-        newMachineStatus: machineStatus,
-        hasDowntimeEvent: !!currentState.currentDowntimeEventId,
-        shouldUpdate: shouldUpdateMachineStatus
-      });
+      // console.log('🔄 Store: Verificando atualização de status:', {
+      //   currentMachineStatus: currentState.machineStatus,
+      //   newMachineStatus: machineStatus,
+      //   hasDowntimeEvent: !!currentState.currentDowntimeEventId,
+      //   shouldUpdate: shouldUpdateMachineStatus
+      // });
       
       set({ 
         liveMetrics,
@@ -272,10 +313,20 @@ export const useProductionStore = create<ProductionState>()(
         error: null
       });
 
-      // Se a máquina parou E não estamos já na tela de parada E não há um evento de parada em andamento
-      if (machineStatus === 'DOWN' && get().view !== ViewState.STOP_REASON && !get().currentDowntimeEventId) {
-        console.log('🔄 Store: Máquina parou, mostrando modal de motivo...');
-        const currentView = get().view;
+      // Verificar se houve transição para parada (de status ativo para DOWN)
+      const updatedState = get();
+      const previousMachineStatus = currentState.machineStatus;
+      const isTransitionToDown = machineStatus === 'DOWN' && 
+        previousMachineStatus !== 'DOWN' && 
+        ['RUNNING', 'PAUSED', 'SETUP', 'STANDBY'].includes(previousMachineStatus);
+      
+      // Se a máquina parou E não estamos já na tela de parada E não há um evento de parada em andamento E houve transição
+      if (isTransitionToDown && updatedState.view !== ViewState.STOP_REASON && !updatedState.currentDowntimeEventId) {
+        // console.log('🔄 Store: Transição para parada detectada, mostrando modal de motivo...', {
+        //   previousStatus: previousMachineStatus,
+        //   newStatus: machineStatus
+        // });
+        const currentView = updatedState.view;
         const newEventId = `evt${Date.now()}`;
         set({ 
           previousView: currentView,
@@ -292,13 +343,15 @@ export const useProductionStore = create<ProductionState>()(
               totalTime: null, 
               reason: 'Aguardando motivo...' 
             },
-            ...get().downtimeHistory
+            ...updatedState.downtimeHistory
           ]
         });
-      } else if (machineStatus === 'DOWN' && get().currentDowntimeEventId) {
-        console.log('🔄 Store: Máquina ainda parada, evento já registrado:', get().currentDowntimeEventId);
-      } else if (machineStatus === 'DOWN' && get().view === ViewState.STOP_REASON) {
-        console.log('🔄 Store: Máquina parada, já na tela de parada');
+      } else if (machineStatus === 'DOWN' && updatedState.currentDowntimeEventId) {
+        // console.log('🔄 Store: Máquina ainda parada, evento já registrado:', updatedState.currentDowntimeEventId);
+      } else if (machineStatus === 'DOWN' && updatedState.view === ViewState.STOP_REASON) {
+        // console.log('🔄 Store: Máquina parada, já na tela de parada');
+      } else if (machineStatus === 'DOWN' && !isTransitionToDown) {
+        // console.log('🔄 Store: Máquina já estava parada, não é uma transição');
       }
     } catch (error) {
       console.error('🔄 Store: Erro ao buscar dados em tempo real (tratado silenciosamente):', error);
@@ -342,12 +395,12 @@ export const useProductionStore = create<ProductionState>()(
             : event
         );
         
-        console.log('✅ Motivo da parada registrado:', { 
-          reason, 
-          reasonId, 
-          previousView,
-          eventId: state.currentDowntimeEventId 
-        });
+        // console.log('✅ Motivo da parada registrado:', { 
+        //   reason, 
+        //   reasonId, 
+        //   previousView,
+        //   eventId: state.currentDowntimeEventId 
+        // });
         
         return {
           downtimeHistory: updatedHistory,
@@ -394,7 +447,7 @@ export const useProductionStore = create<ProductionState>()(
   setCurrentProductionLine: (line: ProductionLine) => {
     set({ currentProductionLine: line });
     // Em um sistema real, isso dispararia uma API call para buscar dados da linha
-    console.log('Linha de produção selecionada:', line.line);
+    // console.log('Linha de produção selecionada:', line.line);
   },
 
   setCurrentShift: (shift: Shift) => {
@@ -411,9 +464,9 @@ export const useProductionStore = create<ProductionState>()(
         currentProductionLine: data.productionLine,
         currentShift: data.shift,
       });
-      console.log('🔄 Store: Dados atualizados para o turno:', shift.name);
+      // console.log('🔄 Store: Dados atualizados para o turno:', shift.name);
     }).catch(error => {
-      console.error('❌ Store: Erro ao atualizar dados do turno:', error);
+      // console.error('❌ Store: Erro ao atualizar dados do turno:', error);
     });
   },
 
@@ -442,27 +495,59 @@ export const useProductionStore = create<ProductionState>()(
   },
 
   loadRealShifts: async () => {
-    const { shiftService } = get();
-    console.log('🔄 Store: Carregando turnos da API...');
+    const { option7ApiService } = get();
+    const { deviceSettings } = useDeviceSettingsStore.getState();
+    
+    console.log('🔄 Store: Carregando turnos da API Option7...');
     set({ isLoading: true, error: null });
     
     try {
-      // Buscar todos os turnos - sempre há pelo menos um
-      const shifts = await shiftService.getShifts(1, 10);
-      const realShifts = shiftService.convertToShifts(shifts);
+      if (!deviceSettings.isConfigured) {
+        console.log('⚠️ Dispositivo não configurado, não é possível carregar turnos');
+        set({ isLoading: false });
+        return false;
+      }
+
+      // Buscar turnos da API Option7
+      const workshifts = await option7ApiService.getWorkshifts();
       
-      console.log('✅ Store: Turnos carregados:', realShifts);
+      // Converter para formato do store
+      const realShifts: Shift[] = workshifts.map(workshift => ({
+        id: workshift.id.toString(),
+        name: workshift.nome,
+        startTime: '08:00', // Horários padrão - API não fornece
+        endTime: '18:00', // Horários padrão - API não fornece
+        isActive: true, // Assumir ativo - API não fornece
+        shiftNumberKey: workshift.id
+      }));
       
-      // Sempre definir um turno atual (primeiro da lista ou ativo)
-      let currentShift = realShifts[0]; // Primeiro turno da lista
+      console.log('✅ Store: Turnos carregados da API Option7:', realShifts);
       
-      // Se há turnos ativos, usar o primeiro ativo
-      const activeShifts = realShifts.filter(shift => shift.isActive);
-      if (activeShifts.length > 0) {
-        currentShift = activeShifts[0];
-        console.log('✅ Store: Turno ativo encontrado:', currentShift.name);
+      // Detectar turno atual baseado no horário
+      const now = new Date();
+      const currentTime = now.getHours() * 60 + now.getMinutes();
+      
+      let currentShift = realShifts.find(shift => {
+        const [startHour, startMin] = shift.startTime.split(':').map(Number);
+        const [endHour, endMin] = shift.endTime.split(':').map(Number);
+        
+        const shiftStartMinutes = startHour * 60 + startMin;
+        const shiftEndMinutes = endHour * 60 + endMin;
+        
+        // Lidar com turnos que passam da meia-noite
+        if (shiftEndMinutes < shiftStartMinutes) {
+          return currentTime >= shiftStartMinutes || currentTime < shiftEndMinutes;
+        } else {
+          return currentTime >= shiftStartMinutes && currentTime < shiftEndMinutes;
+        }
+      });
+      
+      if (currentShift) {
+        console.log('✅ Store: Turno atual detectado:', currentShift.name);
       } else {
-        console.log('⚠️ Store: Nenhum turno ativo, usando primeiro turno da lista:', currentShift.name);
+        console.log('⚠️ Store: Nenhum turno ativo encontrado para o horário atual');
+        // Usar primeiro turno como fallback
+        currentShift = realShifts[0];
       }
       
       set({
@@ -471,25 +556,24 @@ export const useProductionStore = create<ProductionState>()(
         isLoading: false,
       });
       
-      return true; // Sempre há um turno
+      return true;
     } catch (error) {
-      console.error('❌ Store: Erro ao carregar turnos (tratado silenciosamente):', error);
-      // Não definir erro no estado - tratamento silencioso
-      set({ isLoading: false });
+      console.error('❌ Store: Erro ao carregar turnos da API Option7:', error);
+      set({ isLoading: false, error: 'Erro ao carregar turnos' });
       return false;
     }
   },
 
   fetchOeeHistory: async (period: string = '1h') => {
     const { dashboardService, currentShift } = get();
-    console.log('📊 Store: Buscando histórico OEE...', { period, currentShift: currentShift?.name });
+    // console.log('📊 Store: Buscando histórico OEE...', { period, currentShift: currentShift?.name });
     
     try {
       const historyData = await dashboardService.getOeeHistory(currentShift, period);
       set({ oeeHistory: historyData });
-      console.log('✅ Store: Histórico OEE carregado:', historyData);
+      // console.log('✅ Store: Histórico OEE carregado:', historyData);
     } catch (error) {
-      console.error('❌ Store: Erro ao buscar histórico OEE:', error);
+      // console.error('❌ Store: Erro ao buscar histórico OEE:', error);
       // Em caso de erro, definir dados vazios
       set({ oeeHistory: null });
     }
@@ -498,7 +582,7 @@ export const useProductionStore = create<ProductionState>()(
   // Novos métodos WBMS
   fetchTimeDistribution: async () => {
     const { dashboardService, currentShift } = get();
-    console.log('📊 Store: Buscando distribuição de tempo...');
+    // console.log('📊 Store: Buscando distribuição de tempo...');
     try {
       const timeDistributionData = await dashboardService.getTimeDistribution(currentShift);
       
@@ -519,16 +603,16 @@ export const useProductionStore = create<ProductionState>()(
           totalTime: formatTime(timeDistributionData.totalTime)
         }
       });
-      console.log('✅ Store: Distribuição de tempo carregada');
+      // console.log('✅ Store: Distribuição de tempo carregada');
     } catch (error) {
-      console.error('❌ Store: Erro ao buscar distribuição de tempo:', error);
+      // console.error('❌ Store: Erro ao buscar distribuição de tempo:', error);
       // Manter dados vazios em caso de erro
     }
   },
 
   fetchTopStopReasons: async () => {
     const { dashboardService, currentShift } = get();
-    console.log('📊 Store: Buscando principais paradas...');
+    // console.log('📊 Store: Buscando principais paradas...');
     try {
       const stopReasonsData = await dashboardService.getTopStopReasons(currentShift);
       
@@ -550,9 +634,9 @@ export const useProductionStore = create<ProductionState>()(
       }));
 
       set({ topStopReasons: convertedStopReasons });
-      console.log('✅ Store: Principais paradas carregadas');
+      // console.log('✅ Store: Principais paradas carregadas');
     } catch (error) {
-      console.error('❌ Store: Erro ao buscar principais paradas:', error);
+      // console.error('❌ Store: Erro ao buscar principais paradas:', error);
       set({ topStopReasons: [] });
     }
   },
@@ -560,20 +644,20 @@ export const useProductionStore = create<ProductionState>()(
   // Novo método para buscar timeline de produção
   fetchProductionTimeline: async () => {
     const { dashboardService, currentShift } = get();
-    console.log('📊 Store: Buscando timeline de produção...');
+    // console.log('📊 Store: Buscando timeline de produção...');
     try {
       const timelineData = await dashboardService.getProductionTimeline(currentShift);
       // Por enquanto, apenas logar os dados - implementar no componente quando necessário
-      console.log('✅ Store: Timeline de produção carregada:', timelineData);
+      // console.log('✅ Store: Timeline de produção carregada:', timelineData);
     } catch (error) {
-      console.error('❌ Store: Erro ao buscar timeline de produção:', error);
+      // console.error('❌ Store: Erro ao buscar timeline de produção:', error);
     }
   },
 
   // Novo método para buscar histórico de paradas
   fetchDowntimeHistory: async () => {
     const { dashboardService, currentShift } = get();
-    console.log('📊 Store: Buscando histórico de paradas...');
+    // console.log('📊 Store: Buscando histórico de paradas...');
     try {
       const downtimeData = await dashboardService.getDowntimeHistory(currentShift);
       // Converter para o formato esperado pelo frontend
@@ -589,16 +673,16 @@ export const useProductionStore = create<ProductionState>()(
       }));
 
       set({ downtimeHistory: convertedDowntimeHistory });
-      console.log('✅ Store: Histórico de paradas carregado');
+      // console.log('✅ Store: Histórico de paradas carregado');
     } catch (error) {
-      console.error('❌ Store: Erro ao buscar histórico de paradas:', error);
+      // console.error('❌ Store: Erro ao buscar histórico de paradas:', error);
     }
   },
 
   // Novo método para buscar dados compostos do dashboard
   fetchDashboardComposite: async () => {
     const { dashboardService, currentShift } = get();
-    console.log('📊 Store: Buscando dados compostos do dashboard...');
+    // console.log('📊 Store: Buscando dados compostos do dashboard...');
     set({ isLoading: true, error: null });
     
     try {
@@ -626,9 +710,9 @@ export const useProductionStore = create<ProductionState>()(
         isLoading: false
       });
 
-      console.log('✅ Store: Dados compostos do dashboard carregados');
+      // console.log('✅ Store: Dados compostos do dashboard carregados');
     } catch (error) {
-      console.error('❌ Store: Erro ao buscar dados compostos do dashboard (tratado silenciosamente):', error);
+      // console.error('❌ Store: Erro ao buscar dados compostos do dashboard (tratado silenciosamente):', error);
       // Não definir erro no estado - tratamento silencioso
       set({ isLoading: false });
     }
@@ -658,9 +742,9 @@ export const useProductionStore = create<ProductionState>()(
       }
       
       set({ productionOrders, isLoading: false });
-      console.log('📦 Store: Ordens de produção carregadas:', productionOrders);
+      // console.log('📦 Store: Ordens de produção carregadas:', productionOrders);
     } catch (error) {
-      console.error('❌ Store: Erro ao carregar ordens de produção:', error);
+      // console.error('❌ Store: Erro ao carregar ordens de produção:', error);
       set({ 
         error: error instanceof Error ? error.message : 'Erro ao carregar ordens de produção',
         isLoading: false 
@@ -674,7 +758,7 @@ export const useProductionStore = create<ProductionState>()(
     
     try {
       const jobs = await jobsService.getCurrentShiftJobs();
-      console.log('🔄 Store: Jobs do turno atual carregados:', jobs);
+      // console.log('🔄 Store: Jobs do turno atual carregados:', jobs);
       
       // Converter para ProductionOrders
       const productionOrders: ProductionOrder[] = [];
@@ -686,7 +770,7 @@ export const useProductionStore = create<ProductionState>()(
       
       set({ productionOrders, isLoading: false });
     } catch (error) {
-      console.error('❌ Store: Erro ao carregar jobs do turno:', error);
+      // console.error('❌ Store: Erro ao carregar jobs do turno:', error);
       set({ 
         error: error instanceof Error ? error.message : 'Erro ao carregar jobs do turno',
         isLoading: false 
@@ -705,7 +789,7 @@ export const useProductionStore = create<ProductionState>()(
       
       if (job) {
         const products = await jobsService.getProductsForJob(job);
-        console.log('🎯 Store: Produtos do job carregados:', products);
+        // console.log('🎯 Store: Produtos do job carregados:', products);
         
         // Converter produtos para formato da store
         const convertedProducts = products.map(p => ({
@@ -726,7 +810,7 @@ export const useProductionStore = create<ProductionState>()(
         throw new Error('Job não encontrado');
       }
     } catch (error) {
-      console.error('❌ Store: Erro ao carregar produtos do job:', error);
+      // console.error('❌ Store: Erro ao carregar produtos do job:', error);
       set({ 
         error: error instanceof Error ? error.message : 'Erro ao carregar produtos do job',
         isLoading: false 
@@ -789,40 +873,52 @@ export const useProductionStore = create<ProductionState>()(
     }));
   },
 
-  // Carregar produtos da API e converter para ProductSelection
+  // Carregar produtos da API Option7 e converter para ProductSelection
   loadAvailableProducts: async () => {
     try {
-      console.log('🔄 Store: Carregando produtos da API...');
+      // console.log('🔄 Store: Carregando produtos da API Option7...');
       
-      // Usar o serviço de produção para buscar produtos
-      const productionService = await import('../services/productionService');
-      const products = await productionService.default.getAvailableProducts();
+      const { deviceSettings } = useDeviceSettingsStore.getState();
+      
+      if (!deviceSettings.isConfigured) {
+        // console.log('⚠️ Dispositivo não configurado, não é possível carregar produtos');
+        set({ availableProducts: [] });
+        return;
+      }
+      
+      // Usar a API Option7 para buscar produtos
+      const products = await get().option7ApiService.getProducts(
+        [parseInt(deviceSettings.plantId)],
+        [parseInt(deviceSettings.sectorId)],
+        [parseInt(deviceSettings.lineId)]
+      );
       
       // Converter para ProductSelection
-      const productSelections: ProductSelection[] = products.map((product: Product) => ({
-        id: product.id,
-        name: product.name,
-        product_key: product.product_key,
-        product: product.product,
-        internal_code: product.internal_code,
-        units_per_package: product.units_per_package,
+      const productSelections: ProductSelection[] = products.map((product: any) => ({
+        id: product.id.toString(),
+        name: product.nome,
+        product_key: product.id.toString(),
+        product: product.nome,
+        internal_code: product.codigo,
+        units_per_package: 1, // Valor padrão
         isSelected: false,
-        code: product.code,
-        description: product.description
+        code: product.codigo,
+        description: product.nome
       }));
       
       set({ availableProducts: productSelections });
-      console.log('✅ Store: Produtos carregados:', productSelections);
+      // console.log('✅ Store: Produtos carregados da API Option7:', productSelections);
     } catch (error) {
-      console.error('❌ Store: Erro ao carregar produtos:', error);
+      // console.error('❌ Store: Erro ao carregar produtos da API Option7:', error);
       // Não definir erro no estado - tratamento silencioso
+      set({ availableProducts: [] });
     }
   },
 
   startProductSetup: (setupTypeId: string) => {
     const setupType = get().setupTypes.find(st => st.id === setupTypeId);
     if (setupType) {
-      console.log('🔧 Store: Iniciando setup:', setupType.name);
+      // console.log('🔧 Store: Iniciando setup:', setupType.name);
       set({ 
         machineStatus: MachineStatus.SETUP,
         view: ViewState.SETUP,
@@ -837,7 +933,7 @@ export const useProductionStore = create<ProductionState>()(
 
   fetchStopReasons: async () => {
     const { option7ApiService } = get();
-    console.log('🛑 Store: Buscando motivos de parada da API...');
+    // console.log('🛑 Store: Buscando motivos de parada da API...');
     set({ isLoading: true, error: null });
     
     try {
@@ -932,9 +1028,9 @@ export const useProductionStore = create<ProductionState>()(
         error: null
       });
       
-      console.log('✅ Store: Motivos de parada carregados:', downtimeReasons);
+      // console.log('✅ Store: Motivos de parada carregados:', downtimeReasons);
     } catch (error) {
-      console.error('❌ Store: Erro ao buscar motivos de parada (tratado silenciosamente):', error);
+      // console.error('❌ Store: Erro ao buscar motivos de parada (tratado silenciosamente):', error);
       // Não definir erro no estado - tratamento silencioso
       set({ isLoading: false });
     }
@@ -942,24 +1038,48 @@ export const useProductionStore = create<ProductionState>()(
 
   fetchTimelineData: async () => {
     const { timesheetService } = get();
-    console.log('📈 Store: Buscando dados da timeline de produção...');
+    const { deviceSettings } = useDeviceSettingsStore.getState();
+    
+    // console.log('📈 Store: Buscando dados da timeline de produção...');
     set({ timelineLoading: true, timelineError: null });
     
     try {
-      const timelineEvents = await timesheetService.fetchTimelineData();
+      if (!deviceSettings.isConfigured) {
+        // console.log('⚠️ Dispositivo não configurado, não é possível carregar timeline');
+        set({ timelineEvents: [], timelineLoading: false });
+        return;
+      }
+
+      // Buscar timesheet ativo primeiro
+      const activeTimesheet = await timesheetService.getActiveTimesheet(deviceSettings.lineId);
       
-      set({ 
-        timelineEvents,
-        timelineLoading: false,
-        timelineError: null
-      });
-      
-      console.log('✅ Store: Timeline de produção carregada:', {
-        totalEvents: timelineEvents.length,
-        events: timelineEvents.slice(0, 3) // Log dos primeiros 3 eventos
-      });
+      if (activeTimesheet) {
+        // Carregar eventos da timeline do timesheet ativo
+        const timelineEvents = await timesheetService.getTimelineEvents(activeTimesheet.shift_number_key.toString());
+        
+        set({ 
+          timelineEvents,
+          timelineLoading: false,
+          timelineError: null
+        });
+        
+        // console.log('✅ Store: Timeline de produção carregada:', {
+        //   timesheet: activeTimesheet.shift_number_key,
+        //   totalEvents: timelineEvents.length,
+        //   events: timelineEvents.slice(0, 3) // Log dos primeiros 3 eventos
+        // });
+      } else {
+        // Se não há timesheet ativo, timeline vazia
+        set({ 
+          timelineEvents: [],
+          timelineLoading: false,
+          timelineError: null
+        });
+        
+        console.log('⚠️ Store: Nenhum timesheet ativo, timeline vazia');
+      }
     } catch (error) {
-      console.error('❌ Store: Erro ao buscar dados da timeline (tratado silenciosamente):', error);
+      // console.error('❌ Store: Erro ao buscar dados da timeline (tratado silenciosamente):', error);
       // Não definir erro no estado - tratamento silencioso
       set({ timelineLoading: false });
     }

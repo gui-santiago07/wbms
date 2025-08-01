@@ -37,8 +37,6 @@ const MachineControls: React.FC<MachineControlsProps> = ({ isFixed = false }) =>
     setMachineStatus(MachineStatus.DOWN);
   };
 
-  console.log('🎯 MachineControls renderizando:', { isFixed, machineStatus });
-
   if (isFixed) {
     return (
       <div className="fixed bottom-0 left-16 right-0 bg-background border-t border-gray-700 px-3 py-3 z-[9999] min-h-[140px] shadow-lg">
