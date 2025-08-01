@@ -119,10 +119,8 @@ class ApiClient {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
       'X-Requested-With': 'XMLHttpRequest',
-      // 🔧 SOLUÇÃO CORS ATIVADA: Simulando origem esperada pelo servidor
-      // O servidor espera requisições de https://m.option7.ai
-      // Mas estamos executando em https://wbms-mauve.vercel.app
-      ...getFallbackOriginHeaders()
+      // ✅ PROXY VERCEL: Headers normais (proxy resolve CORS)
+      ...getOriginHeaders()
     };
 
     if (this.token) {
@@ -143,10 +141,8 @@ class ApiClient {
       'Content-Type': 'application/x-www-form-urlencoded',
       'Accept': 'application/json',
       'X-Requested-With': 'XMLHttpRequest',
-      // 🔧 SOLUÇÃO CORS ATIVADA: Simulando origem esperada pelo servidor
-      // O servidor espera requisições de https://m.option7.ai
-      // Mas estamos executando em https://wbms-mauve.vercel.app
-      ...getFallbackOriginHeaders()
+      // ✅ PROXY VERCEL: Headers normais (proxy resolve CORS)
+      ...getOriginHeaders()
     };
   }
 

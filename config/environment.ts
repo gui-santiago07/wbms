@@ -23,8 +23,8 @@ const environments: Record<string, EnvironmentConfig> = {
     defaultShiftId: 'turno_1'
   },
   vercel: {
-    // 🚀 CHAMADA DIRETA SEM PROXY
-    apiBaseUrl: 'https://staging.option7.ai/api',
+    // 🚀 PROXY VERCEL ATIVADO
+    apiBaseUrl: '/api',
     pollingInterval: 5000,
     defaultShiftId: 'turno_1'
   }
