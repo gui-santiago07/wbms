@@ -18,7 +18,7 @@ const environments: Record<string, EnvironmentConfig> = {
     defaultShiftId: 'turno_1' 
   },
   production: {
-    apiBaseUrl: 'https://option7.ai/api',
+    apiBaseUrl: 'https://staging.option7.ai/api',
     pollingInterval: 10000,
     defaultShiftId: 'turno_1'
   },
