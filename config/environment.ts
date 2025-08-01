@@ -44,6 +44,9 @@ const getCurrentEnvironment = (): string => {
   const hostname = window.location.hostname;
   if (hostname === 'localhost' || hostname === '127.0.0.1') return 'development';
   
+  // 🔧 3. Detectar ambiente Vercel
+  if (hostname.includes('vercel.app')) return 'vercel';
+  
   if (hostname.includes('staging')) return 'staging';
   return 'production';
 };

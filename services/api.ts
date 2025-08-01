@@ -18,13 +18,29 @@ const getOriginHeaders = (): Partial<{ Origin: string; Referer: string }> => {
     console.log('🔧 Headers de origem: omitidos (desenvolvimento com proxy)');
     return {};
   } else {
-    // Em produção/staging, usar headers de origem consistentes
-    console.log('🔧 Headers de origem: aplicados (produção/staging)');
+    // Em produção/staging/Vercel, NÃO enviar headers de origem
+    // Deixar o navegador enviar os headers corretos automaticamente
+    // Isso evita conflitos de CORS quando o servidor espera origens específicas
+    console.log('🔧 Headers de origem: omitidos (produção/staging/vercel) - deixando navegador gerenciar');
+    return {};
+  }
+};
+
+// 🔧 SOLUÇÃO ALTERNATIVA PARA CORS NO VERCEL
+// Se o problema persistir, podemos usar esta função que simula a origem esperada
+const getFallbackOriginHeaders = (): Partial<{ Origin: string; Referer: string }> => {
+  const hostname = window.location.hostname;
+  
+  // Se estamos no Vercel e o servidor espera m.option7.ai
+  if (hostname.includes('vercel.app')) {
+    console.log('🔧 Headers de origem FALLBACK: simulando m.option7.ai para Vercel');
     return {
       'Origin': 'https://m.option7.ai',
       'Referer': 'https://m.option7.ai/'
     };
   }
+  
+  return {};
 };
 
 // Função para log detalhado das requisições
@@ -104,6 +120,8 @@ class ApiClient {
       'Accept': 'application/json',
       'X-Requested-With': 'XMLHttpRequest',
       // ✅ HEADERS DE ORIGEM DINÂMICOS BASEADOS NO AMBIENTE
+      // 🔧 SOLUÇÃO CORS: Deixando navegador gerenciar headers de origem
+      // Se o problema persistir, substitua getOriginHeaders() por getFallbackOriginHeaders()
       ...getOriginHeaders()
     };
 
@@ -126,6 +144,8 @@ class ApiClient {
       'Accept': 'application/json',
       'X-Requested-With': 'XMLHttpRequest',
       // ✅ HEADERS DE ORIGEM DINÂMICOS BASEADOS NO AMBIENTE
+      // 🔧 SOLUÇÃO CORS: Deixando navegador gerenciar headers de origem
+      // Se o problema persistir, substitua getOriginHeaders() por getFallbackOriginHeaders()
       ...getOriginHeaders()
     };
   }
