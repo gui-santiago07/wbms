@@ -17,7 +17,7 @@ export default defineConfig(({ mode }) => {
         proxy: {
           //  PROXY SIMPLES - SÓ PARA RESOLVER CORS
           '/api': {
-            target: 'http://localhost:8090',
+            target: 'http://staging.option7.ai',
             changeOrigin: true,
             secure: true,
             configure: (proxy, options) => {
