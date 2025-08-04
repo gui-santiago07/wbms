@@ -2,12 +2,33 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "https://staging.option7.ai/api/$1"
+      "destination": "http://localhost:8090/api/$1"
+    },
+    {
+      "source": "/automatic-production/(.*)",
+      "destination": "http://localhost:8090/automatic-production/$1"
     }
   ],
   "headers": [
     {
       "source": "/api/(.*)",
+      "headers": [
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "*"
+        },
+        {
+          "key": "Access-Control-Allow-Methods",
+          "value": "GET, POST, PUT, DELETE, OPTIONS"
+        },
+        {
+          "key": "Access-Control-Allow-Headers",
+          "value": "Content-Type, Authorization, X-Requested-With"
+        }
+      ]
+    },
+    {
+      "source": "/automatic-production/(.*)",
       "headers": [
         {
           "key": "Access-Control-Allow-Origin",

@@ -9,7 +9,7 @@ import DashboardPage from './pages/DashboardPage';
 import DeviceSettingsPage from './pages/DeviceSettingsPage';
 import ProductionControlPage from './pages/ProductionControlPage';
 import OeeScreen from './components/features/dashboard/OeeScreen';
-import DebugPanel from './components/ui/DebugPanel';
+
 
 const App: React.FC = () => {
   return (
@@ -67,8 +67,7 @@ const App: React.FC = () => {
           <Route path="*" element={<Navigate to="/oee" replace />} />
         </Routes>
         
-        {/* Debug Panel - sempre visível */}
-        <DebugPanel />
+
       </div>
     </AuthProvider>
   );

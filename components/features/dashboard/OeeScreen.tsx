@@ -10,6 +10,7 @@ import SetupModal from '../modals/SetupModal';
 import ShiftModal from '../modals/ShiftModal';
 import ProductSelectionModal from '../modals/ProductSelectionModal';
 import LineSelectionModal from '../modals/LineSelectionModal';
+import InitialSetupModal from '../modals/InitialSetupModal';
 import LoadingSpinner from '../../ui/LoadingSpinner';
 import ErrorMessage from '../../ui/ErrorMessage';
 import TimeDistributionChart from './TimeDistributionChart';
@@ -19,8 +20,9 @@ import ProductionDetailsCard from './ProductionDetailsCard';
 
 import { useProductionStore } from '../../../store/useProductionStore';
 import { useDeviceSettingsStore } from '../../../store/useDeviceSettingsStore';
-import { useActiveShiftDetection } from '../../../hooks/useActiveShiftDetection';
 import { useLineSelection } from '../../../hooks/useLineSelection';
+import { useInitialSetup } from '../../../hooks/useInitialSetup';
+import { useSilentShiftDetection } from '../../../hooks/useSilentShiftDetection';
 import { ViewState } from '../../../types';
 import { useLiveDataPolling } from '../../../hooks/useLiveDataPolling';
 import { useMachineControlsVisibility } from '../../../hooks/useMachineControlsVisibility';
@@ -309,8 +311,19 @@ const OeeView: React.FC = () => {
 const OeeScreen: React.FC = () => {
   const { view, setView, initializeDashboard, isLoading, error, showProductSelectionModal } = useProductionStore();
   const { deviceSettings } = useDeviceSettingsStore();
-  const { currentShift: activeShift, updateActiveShift } = useActiveShiftDetection();
   const { isModalOpen, closeModal, confirmLineSelection, shouldShowModal } = useLineSelection();
+  
+  // Hook para gerenciar configuração inicial
+  const { 
+    showSetupModal, 
+    isChecking, 
+    needsSetup, 
+    handleSetupComplete, 
+    handleSetupClose 
+  } = useInitialSetup();
+  
+  // Hook para detecção silenciosa de turno
+  useSilentShiftDetection();
   
   useLiveDataPolling(3000);
 
@@ -322,19 +335,15 @@ const OeeScreen: React.FC = () => {
     }
   }, []);
 
-  // Inicializar dados do dashboard na primeira carga
+  // Inicializar dados do dashboard quando dispositivo estiver configurado
   useEffect(() => {
-    if (deviceSettings.isConfigured) {
+    if (deviceSettings.isConfigured && !needsSetup) {
+      console.log('✅ Dispositivo configurado, inicializando dashboard...');
       initializeDashboard();
     }
-  }, [initializeDashboard, deviceSettings.isConfigured]);
+  }, [initializeDashboard, deviceSettings.isConfigured, needsSetup]);
 
-  // Atualizar turno ativo quando necessário
-  useEffect(() => {
-    if (deviceSettings.isConfigured && deviceSettings.lineId) {
-      updateActiveShift();
-    }
-  }, [deviceSettings.lineId, deviceSettings.isConfigured, updateActiveShift]);
+
 
   // Hook personalizado para visibilidade do MachineControls
   const shouldShowMachineControls = useMachineControlsVisibility();
@@ -367,7 +376,19 @@ const OeeScreen: React.FC = () => {
     );
   }
 
-  // Mostrar loading durante inicialização
+  // Mostrar loading durante verificação de configuração inicial
+  if (isChecking) {
+    return (
+      <div className="p-4 sm:p-6 lg:p-8 bg-background min-h-screen ml-16 flex items-center justify-center">
+        <div className="text-center">
+          <LoadingSpinner size="lg" />
+          <p className="text-muted mt-4">Verificando configuração...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Mostrar loading durante inicialização do dashboard
   if (isLoading) {
     return (
       <div className="p-4 sm:p-6 lg:p-8 bg-background min-h-screen ml-16 flex items-center justify-center">
@@ -397,6 +418,17 @@ const OeeScreen: React.FC = () => {
           isOpen={isModalOpen}
           onClose={closeModal}
           onConfirm={confirmLineSelection}
+        />
+        
+        {/* Modal de Configuração Inicial */}
+        <InitialSetupModal
+          isOpen={showSetupModal}
+          onClose={handleSetupClose}
+          onComplete={() => {
+            handleSetupComplete();
+            console.log('✅ Configuração inicial concluída, inicializando dashboard...');
+            initializeDashboard();
+          }}
         />
       </div>
       

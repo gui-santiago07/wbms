@@ -241,6 +241,16 @@ export const useDeviceSettingsStore = create<DeviceSettingsStore>()(
         }));
       },
 
+      updateDeviceSettings: async (settings: Partial<DeviceSettings>) => {
+        set(state => ({
+          deviceSettings: {
+            ...state.deviceSettings,
+            ...settings,
+            lastSetupDate: new Date().toISOString()
+          }
+        }));
+      },
+
       resetDeviceSettings: () => {
         set({ deviceSettings: initialDeviceSettings });
       }

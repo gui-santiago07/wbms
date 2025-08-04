@@ -45,10 +45,6 @@ const getFallbackOriginHeaders = (): Partial<{ Origin: string; Referer: string }
 
 // Função para log detalhado das requisições
 const logRequest = (method: string, url: string, headers: HeadersInit, body?: any) => {
-  const debugLog = (window as any).addDebugLog;
-  if (debugLog) {
-    debugLog('info', `🚀 ${method} ${url}`, { headers, body });
-  }
   console.group(`🚀 ${method} ${url}`);
   console.log('📋 Headers:', headers);
   if (body) {
@@ -58,20 +54,12 @@ const logRequest = (method: string, url: string, headers: HeadersInit, body?: an
 };
 
 const logResponse = (method: string, url: string, status: number, data: any) => {
-  const debugLog = (window as any).addDebugLog;
-  if (debugLog) {
-    debugLog('success', `✅ ${method} ${url} (${status})`, data);
-  }
   console.group(`✅ ${method} ${url} (${status})`);
   console.log('📄 Response:', data);
   console.groupEnd();
 };
 
 const logError = (method: string, url: string, error: any) => {
-  const debugLog = (window as any).addDebugLog;
-  if (debugLog) {
-    debugLog('error', `❌ ${method} ${url} - ERRO`, error);
-  }
   console.group(`❌ ${method} ${url} - ERRO`);
   console.error('🔍 Error Details:', error);
   if (error instanceof Response) {
@@ -95,14 +83,7 @@ class ApiClient {
     this.baseUrl = baseUrl;
     this.token = localStorage.getItem('mobile_api_token');
     
-    const debugLog = (window as any).addDebugLog;
-    if (debugLog) {
-      debugLog('info', '🔧 ApiClient inicializado (HEADERS PADRONIZADOS)', {
-        baseUrl: this.baseUrl,
-        hasToken: !!this.token,
-        tokenPreview: this.token ? `${this.token.substring(0, 20)}...` : 'null'
-      });
-    }
+
     
     console.log('🔧 ApiClient inicializado (HEADERS PADRONIZADOS):', {
       baseUrl: this.baseUrl,
@@ -193,13 +174,7 @@ class ApiClient {
       localStorage.setItem('mobile_api_token', data.token);
       localStorage.setItem('user_name', cleanPhpSerializedString(data.nome)); // Limpar nome serializado
       
-      const debugLog = (window as any).addDebugLog;
-      if (debugLog) {
-        debugLog('success', '🔐 Token salvo (HEADERS PADRONIZADOS)', {
-          tokenPreview: `${data.token.substring(0, 20)}...`,
-          nome: cleanPhpSerializedString(data.nome)
-        });
-      }
+      
       
       console.log('🔐 Token salvo (HEADERS PADRONIZADOS):', {
         tokenPreview: `${data.token.substring(0, 20)}...`,
@@ -247,10 +222,6 @@ class ApiClient {
 
   // Logout
   logout(): void {
-    const debugLog = (window as any).addDebugLog;
-    if (debugLog) {
-      debugLog('info', '🚪 Logout - limpando dados');
-    }
     console.log('🚪 Logout - limpando dados');
     this.token = null;
     localStorage.removeItem('mobile_api_token');

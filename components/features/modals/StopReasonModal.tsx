@@ -142,16 +142,7 @@ const StopReasonModal: React.FC = () => {
     } catch (error) {
       console.error('❌ Erro ao registrar motivo:', error);
       
-      // Adicionar erro ao DebugPanel
-      const debugLog = (window as any).addDebugLog;
-      if (debugLog) {
-        debugLog('error', '❌ Erro ao registrar motivo da parada', {
-          reason,
-          reasonId,
-          error: error instanceof Error ? error.message : 'Erro desconhecido',
-          timestamp: new Date().toISOString()
-        });
-      }
+
     } finally {
       setIsSubmitting(false);
     }

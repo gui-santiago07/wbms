@@ -21,7 +21,7 @@ import Card from '../components/ui/Card';
 import Sidebar from '../components/features/dashboard/Sidebar';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import ErrorMessage from '../components/ui/ErrorMessage';
-import DebugPanel from '../components/ui/DebugPanel';
+
 import { config } from '../config/environment';
 
 const DashboardView: React.FC = () => {
@@ -30,8 +30,7 @@ const DashboardView: React.FC = () => {
 
   return (
     <div className="space-y-3">
-      {/* Debug Panel - apenas em desenvolvimento */}
-      {process.env.NODE_ENV === 'development' && <DebugPanel />}
+
       
        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         {/* First Column */}

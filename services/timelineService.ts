@@ -212,113 +212,92 @@ class TimelineService {
     // Simular delay da API
     await new Promise(resolve => setTimeout(resolve, 2000));
     
-    // Dados mockados para demonstração
+    // Dados mockados baseados na imagem de referência (02-03 Aug)
+    const baseDate = new Date('2024-08-02T00:00:00');
+    
     return {
       events: [
-        {
-          id: '1',
-          start: '2024-01-20T08:00:00',
-          end: '2024-01-20T10:30:00',
-          status: 'Run',
-          description: 'Produção Normal',
-          duration: 9000
-        },
-        {
-          id: '2',
-          start: '2024-01-20T10:30:00',
-          end: '2024-01-20T11:00:00',
-          status: 'Setup',
-          description: 'Troca de Produto',
-          duration: 1800
-        },
-        {
-          id: '3',
-          start: '2024-01-20T11:00:00',
-          end: '2024-01-20T12:00:00',
-          status: 'Run',
-          description: 'Produção Normal',
-          duration: 3600
-        },
-        {
-          id: '4',
-          start: '2024-01-20T12:00:00',
-          end: '2024-01-20T13:00:00',
-          status: 'Down',
-          description: 'Manutenção',
-          duration: 3600
-        },
-        {
-          id: '5',
-          start: '2024-01-20T13:00:00',
-          end: '2024-01-20T14:00:00',
-          status: 'Standby',
-          description: 'Aguardando Material',
-          duration: 3600
-        }
+        // Eventos do dia 02/08
+        { id: '1', start: '2024-08-02T06:00:00', end: '2024-08-02T08:00:00', status: 'Run', description: 'Produção Normal', duration: 7200 },
+        { id: '2', start: '2024-08-02T08:00:00', end: '2024-08-02T08:30:00', status: 'Setup', description: 'Setup Inicial', duration: 1800 },
+        { id: '3', start: '2024-08-02T08:30:00', end: '2024-08-02T10:00:00', status: 'Run', description: 'Produção Normal', duration: 5400 },
+        { id: '4', start: '2024-08-02T10:00:00', end: '2024-08-02T11:00:00', status: 'Down', description: 'Manutenção', duration: 3600 },
+        { id: '5', start: '2024-08-02T11:00:00', end: '2024-08-02T12:00:00', status: 'Standby', description: 'Aguardando', duration: 3600 },
+        { id: '6', start: '2024-08-02T12:00:00', end: '2024-08-02T14:00:00', status: 'Run', description: 'Produção Normal', duration: 7200 },
+        { id: '7', start: '2024-08-02T14:00:00', end: '2024-08-02T15:00:00', status: 'Setup', description: 'Troca Produto', duration: 3600 },
+        { id: '8', start: '2024-08-02T15:00:00', end: '2024-08-02T16:00:00', status: 'Run', description: 'Produção Normal', duration: 3600 },
+        { id: '9', start: '2024-08-02T16:00:00', end: '2024-08-02T18:00:00', status: 'Down', description: 'Parada Técnica', duration: 7200 },
+        { id: '10', start: '2024-08-02T18:00:00', end: '2024-08-02T20:00:00', status: 'Run', description: 'Produção Normal', duration: 7200 },
+        { id: '11', start: '2024-08-02T20:00:00', end: '2024-08-02T22:00:00', status: 'Standby', description: 'Aguardando', duration: 7200 },
+        { id: '12', start: '2024-08-02T22:00:00', end: '2024-08-03T00:00:00', status: 'Run', description: 'Produção Normal', duration: 7200 },
+        
+        // Eventos do dia 03/08
+        { id: '13', start: '2024-08-03T00:00:00', end: '2024-08-03T02:00:00', status: 'Down', description: 'Manutenção', duration: 7200 },
+        { id: '14', start: '2024-08-03T02:00:00', end: '2024-08-03T04:00:00', status: 'Run', description: 'Produção Normal', duration: 7200 },
+        { id: '15', start: '2024-08-03T04:00:00', end: '2024-08-03T06:00:00', status: 'Setup', description: 'Setup Final', duration: 7200 },
+        { id: '16', start: '2024-08-03T06:00:00', end: '2024-08-03T08:00:00', status: 'Run', description: 'Produção Normal', duration: 7200 },
+        { id: '17', start: '2024-08-03T08:00:00', end: '2024-08-03T10:00:00', status: 'Standby', description: 'Aguardando', duration: 7200 },
+        { id: '18', start: '2024-08-03T10:00:00', end: '2024-08-03T12:00:00', status: 'Run', description: 'Produção Normal', duration: 7200 },
+        { id: '19', start: '2024-08-03T12:00:00', end: '2024-08-03T14:00:00', status: 'Down', description: 'Parada Técnica', duration: 7200 },
+        { id: '20', start: '2024-08-03T14:00:00', end: '2024-08-03T16:00:00', status: 'Run', description: 'Produção Normal', duration: 7200 },
+        { id: '21', start: '2024-08-03T16:00:00', end: '2024-08-03T18:00:00', status: 'Setup', description: 'Troca Produto', duration: 7200 },
+        { id: '22', start: '2024-08-03T18:00:00', end: '2024-08-03T20:00:00', status: 'Run', description: 'Produção Normal', duration: 7200 },
+        { id: '23', start: '2024-08-03T20:00:00', end: '2024-08-03T22:00:00', status: 'Standby', description: 'Aguardando', duration: 7200 },
+        { id: '24', start: '2024-08-03T22:00:00', end: '2024-08-03T23:59:59', status: 'Run', description: 'Produção Normal', duration: 7199 }
       ],
       products: [
-        {
-          id: '1',
-          start: '2024-01-20T08:00:00',
-          end: '2024-01-20T10:30:00',
-          productName: 'Produto A - Lote 001',
-          quantity: 150,
-          duration: 9000
-        },
-        {
-          id: '2',
-          start: '2024-01-20T11:00:00',
-          end: '2024-01-20T12:00:00',
-          productName: 'Produto B - Lote 002',
-          quantity: 100,
-          duration: 3600
-        },
-        {
-          id: '3',
-          start: '2024-01-20T14:00:00',
-          end: '2024-01-20T16:00:00',
-          productName: 'Produto C - Lote 003',
-          quantity: 200,
-          duration: 7200
-        }
+        // Produtos do dia 02/08
+        { id: '1', start: '2024-08-02T06:00:00', end: '2024-08-02T10:00:00', productName: 'FQF 2100068', quantity: 150, duration: 14400 },
+        { id: '2', start: '2024-08-02T10:30:00', end: '2024-08-02T14:00:00', productName: 'Anti FL 2100036', quantity: 200, duration: 12600 },
+        { id: '3', start: '2024-08-02T15:00:00', end: '2024-08-02T18:00:00', productName: 'Anti FL 2100036', quantity: 180, duration: 10800 },
+        { id: '4', start: '2024-08-02T20:00:00', end: '2024-08-02T22:00:00', productName: 'Anti. M 2100280', quantity: 120, duration: 7200 },
+        { id: '5', start: '2024-08-02T22:00:00', end: '2024-08-03T02:00:00', productName: 'Anti. M 2100280', quantity: 160, duration: 14400 },
+        
+        // Produtos do dia 03/08
+        { id: '6', start: '2024-08-03T02:00:00', end: '2024-08-03T06:00:00', productName: 'Anti FL 2100036', quantity: 220, duration: 14400 },
+        { id: '7', start: '2024-08-03T08:00:00', end: '2024-08-03T12:00:00', productName: 'FQF 2100068', quantity: 140, duration: 14400 },
+        { id: '8', start: '2024-08-03T14:00:00', end: '2024-08-03T18:00:00', productName: 'Anti. M 2100280', quantity: 190, duration: 14400 },
+        { id: '9', start: '2024-08-03T20:00:00', end: '2024-08-03T23:59:59', productName: 'Anti FL 2100036', quantity: 170, duration: 14399 }
       ],
       shifts: [
-        {
-          id: '1',
-          start: '2024-01-20T08:00:00',
-          end: '2024-01-20T16:00:00',
-          shiftName: 'Turno 1 - Manhã',
-          duration: 28800
-        }
+        // Turnos do dia 02/08
+        { id: '1', start: '2024-08-02T06:00:00', end: '2024-08-02T14:00:00', shiftName: 'Turno 1', duration: 28800 },
+        { id: '2', start: '2024-08-02T14:00:00', end: '2024-08-02T22:00:00', shiftName: 'Turno 2', duration: 28800 },
+        { id: '3', start: '2024-08-02T22:00:00', end: '2024-08-03T06:00:00', shiftName: 'Turno 3', duration: 28800 },
+        
+        // Turnos do dia 03/08
+        { id: '4', start: '2024-08-03T06:00:00', end: '2024-08-03T14:00:00', shiftName: 'Turno 1', duration: 28800 },
+        { id: '5', start: '2024-08-03T14:00:00', end: '2024-08-03T22:00:00', shiftName: 'Turno 2', duration: 28800 },
+        { id: '6', start: '2024-08-03T22:00:00', end: '2024-08-03T23:59:59', shiftName: 'Turno 3', duration: 7199 }
       ],
       status: {
         'Run': {
-          occurrences: 2,
-          totalTime: 12600,
+          occurrences: 12,
+          totalTime: 86400,
           minTime: 3600,
-          avgTime: 6300,
-          maxTime: 9000
+          avgTime: 7200,
+          maxTime: 7200
         },
         'Setup': {
-          occurrences: 1,
-          totalTime: 1800,
+          occurrences: 4,
+          totalTime: 19800,
           minTime: 1800,
-          avgTime: 1800,
-          maxTime: 1800
+          avgTime: 4950,
+          maxTime: 7200
         },
         'Down': {
-          occurrences: 1,
-          totalTime: 3600,
+          occurrences: 4,
+          totalTime: 28800,
           minTime: 3600,
-          avgTime: 3600,
-          maxTime: 3600
+          avgTime: 7200,
+          maxTime: 7200
         },
         'Standby': {
-          occurrences: 1,
-          totalTime: 3600,
+          occurrences: 4,
+          totalTime: 28800,
           minTime: 3600,
-          avgTime: 3600,
-          maxTime: 3600
+          avgTime: 7200,
+          maxTime: 7200
         }
       }
     };

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, memo } from 'react';
+import React, { useState, useEffect, useRef, memo, useMemo } from 'react';
 import {
   BarChart,
   Bar,
@@ -6,10 +6,9 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer,
-  ComposedChart,
-  Line
+  LabelList,
+  Cell
 } from 'recharts';
 import { useProductionStore } from '../../../store/useProductionStore';
 import { useDeviceSettingsStore } from '../../../store/useDeviceSettingsStore';
@@ -28,73 +27,371 @@ interface FilterData {
   lines: string[];
 }
 
-// Componente wrapper para o chart que resolve problemas de ciclo de vida
-const TimelineChart: React.FC<{
-  data: any[];
-  height: number;
-}> = ({ data, height }) => {
-  const [isMounted, setIsMounted] = useState(false);
+// Tipos para dados processados dos gráficos
+interface ProcessedTimelineData {
+  shiftsData: any[];
+  productsData: any[];
+  eventsData: any[];
+  timeDomain: [number, number];
+}
 
-  useEffect(() => {
-    // Delay para garantir que o DOM está pronto
-    const timer = setTimeout(() => {
-      setIsMounted(true);
-    }, 100);
-
-    return () => {
-      clearTimeout(timer);
-      setIsMounted(false);
-    };
-  }, []);
-
-  if (!isMounted) {
-    return (
-      <div className="w-full h-[400px] flex items-center justify-center bg-gray-800 rounded">
-        <LoadingSpinner size="md" />
-      </div>
-    );
+// Função para transformar dados em linha única
+function transformarParaLinhaUnica(eventos: any[], yLabel: string, minTime: number, getColor: (item: any) => string, getLabel: (item: any) => string) {
+  if (!eventos || eventos.length === 0) {
+    return [];
   }
 
-  if (!data || data.length === 0) {
-    return (
-      <div className="w-full h-[400px] flex items-center justify-center bg-gray-800 rounded">
-        <div className="text-center">
-          <div className="text-gray-400 mb-2">Nenhum dado disponível</div>
-        </div>
-      </div>
-    );
+  const linhaUnica: any = {
+    yLabel: yLabel,
+  };
+
+  // 1. Calcula o espaçador inicial
+  const primeiroEventoStartTime = new Date(eventos[0].start).getTime();
+  const graficoMinTime = minTime;
+  linhaUnica.spacer = primeiroEventoStartTime - graficoMinTime;
+
+  // 2. Adiciona cada evento como uma propriedade única
+  eventos.forEach((evento, index) => {
+    const startTime = new Date(evento.start).getTime();
+    const endTime = new Date(evento.end).getTime();
+    const duracao = endTime - startTime;
+
+    // Cria uma chave única para a duração e para a cor
+    linhaUnica[`evento_${index}_duracao`] = duracao;
+    linhaUnica[`evento_${index}_cor`] = getColor(evento);
+    linhaUnica[`evento_${index}_label`] = getLabel(evento);
+  });
+
+  return [linhaUnica];
+}
+
+// Componente CustomTooltip que usa posição do mouse e lista original de dados
+interface CustomTooltipProps {
+  active?: boolean;
+  payload?: any[];
+  coordinate?: { x: number; y: number };
+  originalData: any[];
+  timeDomain: [number, number];
+  chartWidth: number;
+  type: 'shifts' | 'products' | 'events';
+}
+
+const CustomTooltip: React.FC<CustomTooltipProps> = ({ 
+  active, 
+  coordinate, 
+  originalData, 
+  timeDomain, 
+  chartWidth, 
+  type 
+}) => {
+  if (!active || !coordinate || !originalData || originalData.length === 0) {
+    return null;
+  }
+
+  // Converter posição X do mouse em timestamp
+  const mouseX = coordinate.x;
+  const [minTime, maxTime] = timeDomain;
+  const timeRange = maxTime - minTime;
+  const pixelsPerMs = chartWidth / timeRange;
+  const mouseTimestamp = minTime + (mouseX / pixelsPerMs);
+
+  // Encontrar o item que estava acontecendo naquele momento
+  const currentItem = originalData.find(item => {
+    const startTime = new Date(item.start).getTime();
+    const endTime = new Date(item.end).getTime();
+    return mouseTimestamp >= startTime && mouseTimestamp <= endTime;
+  });
+
+  if (!currentItem) {
+    return null;
+  }
+
+  const formatDuration = (milliseconds: number) => {
+    const hours = Math.floor(milliseconds / (1000 * 60 * 60));
+    const minutes = Math.floor((milliseconds % (1000 * 60 * 60)) / (1000 * 60));
+    return `${hours}h ${minutes}m`;
+  };
+
+  const startTime = new Date(currentItem.start).toLocaleTimeString('pt-BR', {
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+  const endTime = new Date(currentItem.end).toLocaleTimeString('pt-BR', {
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+  const duration = new Date(currentItem.end).getTime() - new Date(currentItem.start).getTime();
+
+  let title = '';
+  let subtitle = '';
+
+  switch (type) {
+    case 'shifts':
+      title = currentItem.shiftName;
+      subtitle = 'Turno';
+      break;
+    case 'products':
+      title = currentItem.productName;
+      subtitle = 'Produto';
+      break;
+    case 'events':
+      title = currentItem.status;
+      subtitle = 'Evento';
+      break;
   }
 
   return (
-    <ResponsiveContainer width="100%" height={height}>
-      <ComposedChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-        <XAxis 
-          dataKey="time" 
-          stroke="#9CA3AF"
-          tick={{ fill: '#9CA3AF' }}
-          axisLine={{ stroke: '#374151' }}
-        />
-        <YAxis 
-          stroke="#9CA3AF"
-          tick={{ fill: '#9CA3AF' }}
-          axisLine={{ stroke: '#374151' }}
-        />
-        <Tooltip 
-          contentStyle={{ 
-            backgroundColor: '#1F2937', 
-            border: '1px solid #374151',
-            borderRadius: '8px',
-            color: '#F9FAFB'
-          }}
-          labelStyle={{ color: '#F9FAFB' }}
-        />
-        <Legend />
-        <Bar dataKey="events" fill="#22c55e" name="Eventos" />
-        <Bar dataKey="products" fill="#8b5cf6" name="Produtos" />
-        <Bar dataKey="shifts" fill="#3b82f6" name="Turnos" />
-      </ComposedChart>
-    </ResponsiveContainer>
+    <div className="bg-gray-800 border border-gray-600 rounded p-3 text-white text-sm shadow-lg">
+      <p className="font-semibold text-blue-400">{subtitle}</p>
+      <p className="font-bold text-lg">{title}</p>
+      <div className="mt-2 space-y-1">
+        <p><span className="text-gray-400">Início:</span> {startTime}</p>
+        <p><span className="text-gray-400">Fim:</span> {endTime}</p>
+        <p><span className="text-gray-400">Duração:</span> {formatDuration(duration)}</p>
+        {currentItem.description && (
+          <p><span className="text-gray-400">Descrição:</span> {currentItem.description}</p>
+        )}
+        {type === 'products' && currentItem.quantity && (
+          <p><span className="text-gray-400">Quantidade:</span> {currentItem.quantity}</p>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// Componente para o gráfico de Turnos
+const ShiftsChart: React.FC<{ 
+  data: any[]; 
+  timeDomain: [number, number]; 
+  originalData: any[];
+}> = ({ data, timeDomain, originalData }) => {
+  if (!data || data.length === 0) {
+    return (
+      <div className="h-16 bg-gray-800 rounded flex items-center justify-center">
+        <span className="text-gray-400 text-sm">Nenhum turno disponível</span>
+      </div>
+    );
+  }
+
+  // Pega as chaves dos eventos para renderizar as barras dinamicamente
+  const chavesEventos = Object.keys(data[0] || {}).filter(key => key.includes('_duracao'));
+
+  return (
+    <div className="mb-4">
+      <div className="text-sm font-medium text-white mb-2">Turnos</div>
+      <div style={{ width: '100%', height: 80 }}>
+        <ResponsiveContainer>
+          <BarChart 
+            data={data} 
+            layout="vertical" 
+            margin={{ top: 5, right: 5, left: 5, bottom: 5 }}
+            stackOffset="expand"
+          >
+            <XAxis 
+              type="number" 
+              domain={timeDomain} 
+              hide={true}
+              scale="time"
+            />
+            <YAxis type="category" dataKey="yLabel" width={80} />
+            <Tooltip 
+              content={({ active, coordinate }) => (
+                <CustomTooltip 
+                  active={active}
+                  coordinate={coordinate}
+                  originalData={originalData}
+                  timeDomain={timeDomain}
+                  chartWidth={800} // Valor aproximado, será ajustado pelo ResponsiveContainer
+                  type="shifts"
+                />
+              )} 
+            />
+            
+            {/* Barra de Espaçamento Inicial (Transparente) */}
+            <Bar dataKey="spacer" stackId="timeline" fill="transparent" />
+            
+            {/* Mapeia as chaves para criar as barras coloridas */}
+            {chavesEventos.map((chave, index) => {
+              const cor = data[0][`evento_${index}_cor`];
+              const label = data[0][`evento_${index}_label`];
+              
+              return (
+                <Bar key={chave} dataKey={chave} stackId="timeline" fill={cor}>
+                  <LabelList dataKey={() => label} position="center" fill="#fff" fontSize={11} fontWeight="bold" />
+                </Bar>
+              );
+            })}
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+};
+
+// Componente para o gráfico de Produtos
+const ProductsChart: React.FC<{ 
+  data: any[]; 
+  timeDomain: [number, number]; 
+  originalData: any[];
+}> = ({ data, timeDomain, originalData }) => {
+  if (!data || data.length === 0) {
+    return (
+      <div className="h-16 bg-gray-800 rounded flex items-center justify-center">
+        <span className="text-gray-400 text-sm">Nenhum produto disponível</span>
+      </div>
+    );
+  }
+
+  // Pega as chaves dos eventos para renderizar as barras dinamicamente
+  const chavesEventos = Object.keys(data[0] || {}).filter(key => key.includes('_duracao'));
+
+  return (
+    <div className="mb-4">
+      <div className="text-sm font-medium text-white mb-2">Produtos</div>
+      <div style={{ width: '100%', height: 80 }}>
+        <ResponsiveContainer>
+          <BarChart 
+            data={data} 
+            layout="vertical" 
+            margin={{ top: 5, right: 5, left: 5, bottom: 5 }}
+            stackOffset="expand"
+          >
+            <XAxis 
+              type="number" 
+              domain={timeDomain} 
+              hide={true}
+              scale="time"
+            />
+            <YAxis type="category" dataKey="yLabel" width={80} />
+            <Tooltip 
+              content={({ active, coordinate }) => (
+                <CustomTooltip 
+                  active={active}
+                  coordinate={coordinate}
+                  originalData={originalData}
+                  timeDomain={timeDomain}
+                  chartWidth={800} // Valor aproximado, será ajustado pelo ResponsiveContainer
+                  type="products"
+                />
+              )} 
+            />
+            
+            {/* Barra de Espaçamento Inicial (Transparente) */}
+            <Bar dataKey="spacer" stackId="timeline" fill="transparent" />
+            
+            {/* Mapeia as chaves para criar as barras coloridas */}
+            {chavesEventos.map((chave, index) => {
+              const cor = data[0][`evento_${index}_cor`];
+              const label = data[0][`evento_${index}_label`];
+              
+              return (
+                <Bar key={chave} dataKey={chave} stackId="timeline" fill={cor}>
+                  <LabelList dataKey={() => label} position="center" fill="#fff" fontSize={11} fontWeight="bold" />
+                </Bar>
+              );
+            })}
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+};
+
+// Componente para o gráfico de Eventos
+const EventsChart: React.FC<{ 
+  data: any[]; 
+  timeDomain: [number, number]; 
+  originalData: any[];
+}> = ({ data, timeDomain, originalData }) => {
+  if (!data || data.length === 0) {
+    return (
+      <div className="h-16 bg-gray-800 rounded flex items-center justify-center">
+        <span className="text-gray-400 text-sm">Nenhum evento disponível</span>
+      </div>
+    );
+  }
+
+  const formatTime = (timestamp: number) => {
+    const date = new Date(timestamp);
+    return date.toLocaleTimeString('pt-BR', {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  // Pega as chaves dos eventos para renderizar as barras dinamicamente
+  const chavesEventos = Object.keys(data[0] || {}).filter(key => key.includes('_duracao'));
+
+  return (
+    <div className="mb-4">
+      <div className="text-sm font-medium text-white mb-2">Eventos</div>
+      <div style={{ width: '100%', height: 80 }}>
+        <ResponsiveContainer>
+          <BarChart 
+            data={data} 
+            layout="vertical" 
+            margin={{ top: 5, right: 5, left: 5, bottom: 5 }}
+            stackOffset="expand"
+          >
+            <XAxis 
+              type="number" 
+              domain={timeDomain} 
+              scale="time"
+              tickFormatter={formatTime}
+              stroke="#9CA3AF"
+              tick={{ fill: '#9CA3AF', fontSize: 10 }}
+              axisLine={{ stroke: '#374151' }}
+              interval="preserveStartEnd"
+            />
+            <YAxis type="category" dataKey="yLabel" width={80} />
+            <Tooltip 
+              content={({ active, coordinate }) => (
+                <CustomTooltip 
+                  active={active}
+                  coordinate={coordinate}
+                  originalData={originalData}
+                  timeDomain={timeDomain}
+                  chartWidth={800} // Valor aproximado, será ajustado pelo ResponsiveContainer
+                  type="events"
+                />
+              )} 
+            />
+            
+            {/* Barra de Espaçamento Inicial (Transparente) */}
+            <Bar dataKey="spacer" stackId="timeline" fill="transparent" />
+            
+            {/* Mapeia as chaves para criar as barras coloridas */}
+            {chavesEventos.map((chave, index) => {
+              const cor = data[0][`evento_${index}_cor`];
+              
+              return (
+                <Bar key={chave} dataKey={chave} stackId="timeline" fill={cor} />
+              );
+            })}
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+};
+
+// Componente principal da Timeline
+const TimelineChart: React.FC<{ 
+  processedData: ProcessedTimelineData;
+  originalData: {
+    shifts: any[];
+    products: any[];
+    events: any[];
+  };
+}> = ({ processedData, originalData }) => {
+  const { shiftsData, productsData, eventsData, timeDomain } = processedData;
+
+  return (
+    <div className="space-y-2">
+      <ShiftsChart data={shiftsData} timeDomain={timeDomain} originalData={originalData.shifts} />
+      <ProductsChart data={productsData} timeDomain={timeDomain} originalData={originalData.products} />
+      <EventsChart data={eventsData} timeDomain={timeDomain} originalData={originalData.events} />
+    </div>
   );
 };
 
@@ -133,7 +430,7 @@ const ProductionTimeline: React.FC = () => {
   // Carregar opções de filtro apenas uma vez na montagem
   useEffect(() => {
     loadPlants();
-  }, []); // Remover dependência de loadPlants
+  }, []);
 
   const handlePlantChange = (plantId: string) => {
     setFilterData(prev => ({ ...prev, plant: plantId, sector: '', lines: [] }));
@@ -160,7 +457,6 @@ const ProductionTimeline: React.FC = () => {
     }
 
     try {
-      // Converter FilterData para TimelineFilters
       const timelineFilters: TimelineFilters = {
         startDate: filterData.startDate,
         endDate: filterData.endDate,
@@ -169,7 +465,6 @@ const ProductionTimeline: React.FC = () => {
         lines: filterData.lines
       };
       
-      // Buscar dados da timeline usando API real
       await generateTimeline(timelineFilters);
       setShowFilters(false);
     } catch (error) {
@@ -182,10 +477,9 @@ const ProductionTimeline: React.FC = () => {
 
     setShareLoading(true);
     try {
-      // Preparar dados para compartilhamento
       const shareData: ShareTimelineData = {
         email: shareEmail,
-        chartImage: '', // Será gerada pelo backend
+        chartImage: '',
         filters: {
           startDate: filterData.startDate,
           endDate: filterData.endDate,
@@ -195,7 +489,6 @@ const ProductionTimeline: React.FC = () => {
         }
       };
       
-      // Enviar via API real
       await shareTimeline(shareData);
       
       console.log('Timeline compartilhada com sucesso');
@@ -208,91 +501,15 @@ const ProductionTimeline: React.FC = () => {
     }
   };
 
-  // Preparar dados para o Recharts
-  const getChartData = () => {
-    if (!timelineData) return [];
-    
-    try {
-      const chartData: any[] = [];
-      
-      // Processar eventos
-      if (timelineData.events && timelineData.events.length > 0) {
-        timelineData.events.forEach((event: any) => {
-          const timeSlot = new Date(event.start).toLocaleTimeString('pt-BR', {
-            hour: '2-digit',
-            minute: '2-digit'
-          });
-          
-          const existingSlot = chartData.find(item => item.time === timeSlot);
-          if (existingSlot) {
-            existingSlot.events = (existingSlot.events || 0) + 1;
-          } else {
-            chartData.push({
-              time: timeSlot,
-              events: 1,
-              products: 0,
-              shifts: 0
-            });
-          }
-        });
-      }
-      
-      // Processar produtos
-      if (timelineData.products && timelineData.products.length > 0) {
-        timelineData.products.forEach((product: any) => {
-          const timeSlot = new Date(product.start).toLocaleTimeString('pt-BR', {
-            hour: '2-digit',
-            minute: '2-digit'
-          });
-          
-          const existingSlot = chartData.find(item => item.time === timeSlot);
-          if (existingSlot) {
-            existingSlot.products = (existingSlot.products || 0) + 1;
-          } else {
-            chartData.push({
-              time: timeSlot,
-              events: 0,
-              products: 1,
-              shifts: 0
-            });
-          }
-        });
-      }
-
-      // Processar turnos
-      if (timelineData.shifts && timelineData.shifts.length > 0) {
-        timelineData.shifts.forEach((shift: any) => {
-          const timeSlot = new Date(shift.start).toLocaleTimeString('pt-BR', {
-            hour: '2-digit',
-            minute: '2-digit'
-          });
-          
-          const existingSlot = chartData.find(item => item.time === timeSlot);
-          if (existingSlot) {
-            existingSlot.shifts = (existingSlot.shifts || 0) + 1;
-          } else {
-            chartData.push({
-              time: timeSlot,
-              events: 0,
-              products: 0,
-              shifts: 1
-            });
-          }
-        });
-      }
-      
-      // Ordenar por tempo
-      return chartData.sort((a, b) => {
-        const timeA = new Date(`2000-01-01 ${a.time}`).getTime();
-        const timeB = new Date(`2000-01-01 ${b.time}`).getTime();
-        return timeA - timeB;
-      });
-    } catch (error) {
-      console.error('Erro ao processar dados do chart:', error);
-      return [];
-    }
+  // Função para obter cor baseada no OEE
+  const getOeeColor = (oee: number): string => {
+    if (oee >= 90) return '#22c55e'; // Verde - Excelente
+    if (oee >= 70) return '#f59e0b'; // Laranja - Bom
+    if (oee >= 50) return '#f97316'; // Laranja escuro - Regular
+    return '#ef4444'; // Vermelho - Ruim
   };
 
+  // Função para obter cor baseada no status
   const getStatusColor = (status: string): string => {
     switch (status) {
       case 'Run': return '#22c55e';
@@ -302,6 +519,161 @@ const ProductionTimeline: React.FC = () => {
       default: return '#6b7280';
     }
   };
+
+  // Processar dados para os gráficos
+  const processedData = useMemo((): ProcessedTimelineData => {
+    if (!timelineData) {
+      return {
+        shiftsData: [],
+        productsData: [],
+        eventsData: [],
+        timeDomain: [0, 1]
+      };
+    }
+
+    try {
+      // Passo 1: Definir o domínio de tempo
+      const allTimestamps: number[] = [];
+      
+      // Coletar timestamps de todos os eventos
+      timelineData.events?.forEach(event => {
+        allTimestamps.push(new Date(event.start).getTime());
+        allTimestamps.push(new Date(event.end).getTime());
+      });
+      
+      timelineData.products?.forEach(product => {
+        allTimestamps.push(new Date(product.start).getTime());
+        allTimestamps.push(new Date(product.end).getTime());
+      });
+      
+      timelineData.shifts?.forEach(shift => {
+        allTimestamps.push(new Date(shift.start).getTime());
+        allTimestamps.push(new Date(shift.end).getTime());
+      });
+
+      const minTime = Math.min(...allTimestamps);
+      const maxTime = Math.max(...allTimestamps);
+      const timeDomain: [number, number] = [minTime, maxTime];
+
+
+
+      // Passo 2: Processar dados de Turnos usando linha única
+      const shiftsData = transformarParaLinhaUnica(
+        timelineData.shifts || [],
+        'Turnos',
+        minTime,
+        (shift) => {
+          // Calcular OEE baseado nos eventos do turno
+          const startTime = new Date(shift.start).getTime();
+          const endTime = new Date(shift.end).getTime();
+          const duration = endTime - startTime;
+          
+          const shiftEvents = timelineData.events?.filter(event => {
+            const eventStart = new Date(event.start).getTime();
+            const eventEnd = new Date(event.end).getTime();
+            return eventStart >= startTime && eventEnd <= endTime;
+          }) || [];
+          
+          const runTime = shiftEvents
+            .filter(event => event.status === 'Run')
+            .reduce((total, event) => total + (event.duration * 1000), 0);
+          
+          const oee = duration > 0 ? (runTime / duration) * 100 : 0;
+          return getOeeColor(oee);
+        },
+        (shift) => {
+          // Calcular OEE para o label
+          const startTime = new Date(shift.start).getTime();
+          const endTime = new Date(shift.end).getTime();
+          const duration = endTime - startTime;
+          
+          const shiftEvents = timelineData.events?.filter(event => {
+            const eventStart = new Date(event.start).getTime();
+            const eventEnd = new Date(event.end).getTime();
+            return eventStart >= startTime && eventEnd <= endTime;
+          }) || [];
+          
+          const runTime = shiftEvents
+            .filter(event => event.status === 'Run')
+            .reduce((total, event) => total + (event.duration * 1000), 0);
+          
+          const oee = duration > 0 ? (runTime / duration) * 100 : 0;
+          return `${shift.shiftName} - ${oee.toFixed(2)}%`;
+        }
+      );
+
+      // Passo 3: Processar dados de Produtos usando linha única
+      const productsData = transformarParaLinhaUnica(
+        timelineData.products || [],
+        'Produtos',
+        minTime,
+        (product) => {
+          // Calcular OEE baseado nos eventos do produto
+          const startTime = new Date(product.start).getTime();
+          const endTime = new Date(product.end).getTime();
+          const duration = endTime - startTime;
+          
+          const productEvents = timelineData.events?.filter(event => {
+            const eventStart = new Date(event.start).getTime();
+            const eventEnd = new Date(event.end).getTime();
+            return eventStart >= startTime && eventEnd <= endTime;
+          }) || [];
+          
+          const runTime = productEvents
+            .filter(event => event.status === 'Run')
+            .reduce((total, event) => total + (event.duration * 1000), 0);
+          
+          const oee = duration > 0 ? (runTime / duration) * 100 : 0;
+          return getOeeColor(oee);
+        },
+        (product) => {
+          // Calcular OEE para o label
+          const startTime = new Date(product.start).getTime();
+          const endTime = new Date(product.end).getTime();
+          const duration = endTime - startTime;
+          
+          const productEvents = timelineData.events?.filter(event => {
+            const eventStart = new Date(event.start).getTime();
+            const eventEnd = new Date(event.end).getTime();
+            return eventStart >= startTime && eventEnd <= endTime;
+          }) || [];
+          
+          const runTime = productEvents
+            .filter(event => event.status === 'Run')
+            .reduce((total, event) => total + (event.duration * 1000), 0);
+          
+          const oee = duration > 0 ? (runTime / duration) * 100 : 0;
+          return `${product.productName} - ${oee.toFixed(2)}%`;
+        }
+      );
+
+      // Passo 4: Processar dados de Eventos usando linha única
+      const eventsData = transformarParaLinhaUnica(
+        timelineData.events || [],
+        'Eventos',
+        minTime,
+        (event) => getStatusColor(event.status),
+        (event) => event.status
+      );
+
+
+
+      return {
+        shiftsData,
+        productsData,
+        eventsData,
+        timeDomain
+      };
+    } catch (error) {
+      console.error('Erro ao processar dados da timeline:', error);
+      return {
+        shiftsData: [],
+        productsData: [],
+        eventsData: [],
+        timeDomain: [0, 1]
+      };
+    }
+  }, [timelineData]);
 
   const formatDuration = (seconds: number): string => {
     const hours = Math.floor(seconds / 3600);
@@ -533,14 +905,18 @@ const ProductionTimeline: React.FC = () => {
             <div className="mb-4">
               <h4 className="text-lg font-semibold text-white mb-2">Timeline de Produção</h4>
               <p className="text-sm text-muted">
-                Visualização temporal de eventos, produtos e turnos
+                Visualização temporal de turnos, produtos e eventos
               </p>
             </div>
             
             <div className="w-full">
-              <TimelineChart
-                data={getChartData()}
-                height={400}
+              <TimelineChart 
+                processedData={processedData} 
+                originalData={{
+                  shifts: timelineData?.shifts || [],
+                  products: timelineData?.products || [],
+                  events: timelineData?.events || []
+                }}
               />
             </div>
           </Card>

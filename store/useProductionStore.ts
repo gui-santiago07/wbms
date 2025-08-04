@@ -8,6 +8,8 @@ import WbmsService from '../services/wbmsService';
 import Option7ApiService from '../services/option7ApiService';
 import JobsService from '../services/jobsService';
 import TimesheetService from '../services/timesheetService';
+import AutomaticProductionService from '../services/automaticProductionService';
+import ShiftsService from '../services/shiftsService';
 import { useDeviceSettingsStore } from './useDeviceSettingsStore';
 
 interface ProductionState {
@@ -33,6 +35,7 @@ interface ProductionState {
   option7ApiService: Option7ApiService;
   jobsService: JobsService;
   timesheetService: TimesheetService;
+  automaticProductionService: typeof AutomaticProductionService;
   oeeHistory: {
     points: Array<{ x: number; y: number }>;
     timeLabels: string[];
@@ -65,6 +68,10 @@ interface ProductionState {
     line: string;
     shiftTarget: number;
   } | null;
+  
+  // Controle de verificação de turno
+  lastShiftCheck: number | null;
+  shouldCheckShift: boolean;
   
   setMachineStatus: (status: MachineStatus) => void;
   setView: (view: ViewState) => void;
@@ -105,6 +112,10 @@ interface ProductionState {
   
   // Novo método para carregar Production Details
   loadProductionDetails: (shiftId?: string) => Promise<void>;
+  
+  // Métodos para controle de verificação de turno
+  checkShiftIfNeeded: () => Promise<void>;
+  markShiftCheckNeeded: () => void;
 }
 
 export const useProductionStore = create<ProductionState>()(
@@ -146,6 +157,7 @@ export const useProductionStore = create<ProductionState>()(
   option7ApiService: new Option7ApiService(),
   jobsService: new JobsService(),
   timesheetService: new TimesheetService(),
+  automaticProductionService: AutomaticProductionService,
   oeeHistory: null,
   
   // Novas propriedades WBMS
@@ -177,6 +189,10 @@ export const useProductionStore = create<ProductionState>()(
   
   // Production Details inicial
   productionDetails: null,
+  
+  // Controle de verificação de turno
+  lastShiftCheck: null,
+  shouldCheckShift: true,
 
     setMachineStatus: (status: MachineStatus) => {
     const currentState = get();
@@ -244,112 +260,119 @@ export const useProductionStore = create<ProductionState>()(
   },
 
   initializeDashboard: async () => {
-    // console.log('🏪 Store: Iniciando dashboard...');
+    console.log('🏪 Store: Iniciando dashboard com dados do backend...');
     set({ isLoading: true, error: null });
     
     try {
       const deviceSettings = useDeviceSettingsStore.getState().deviceSettings;
       
-      if (!deviceSettings.isConfigured) {
-        // console.log('⚠️ Dispositivo não configurado');
+      if (!deviceSettings.isConfigured || !deviceSettings.lineId) {
+        console.log('⚠️ Dispositivo não configurado ou linha não definida');
         set({ isLoading: false });
         return;
       }
 
-      // 1. Detectar turno atual
+      // 1. Marcar que precisa verificar turno na inicialização
+      get().markShiftCheckNeeded();
+      
+      // 2. Detectar turno atual
       await get().loadRealShifts();
       
-      // 2. Carregar Production Details do turno atual
-      const currentShift = get().currentShift;
-      if (currentShift?.id) {
-        await get().loadProductionDetails(currentShift.id);
-      }
+      // 3. Carregar Production Details do backend
+      await get().loadProductionDetails();
       
-      // 3. Buscar timesheet ativo
-      const activeTimesheet = await get().timesheetService.getActiveTimesheet(deviceSettings.lineId);
-      
-      if (activeTimesheet) {
-        // 4. Carregar eventos da timeline
-        const timelineEvents = await get().timesheetService.getTimelineEvents(activeTimesheet.shift_number_key.toString());
-        set({ timelineEvents });
-        
-        // 5. Carregar jobs do turno
-        const shiftJobs = await get().timesheetService.getShiftJobs(activeTimesheet.shift_number_key.toString());
-        set({ currentShiftJobs: shiftJobs });
-        
-        // console.log('✅ Dados do timesheet carregados:', {
-        //   timesheet: activeTimesheet.shift_number_key,
-        //   events: timelineEvents.length,
-        //   jobs: shiftJobs.length
-        // });
-      } else {
-        // console.log('⚠️ Nenhum timesheet ativo encontrado');
-        set({ timelineEvents: [], currentShiftJobs: [] });
-      }
-
-      // 6. Carregar dados em tempo real
+      // 4. Carregar dados em tempo real do backend
       await get().fetchLiveData();
       
-      // console.log('🏪 Store: Dashboard inicializado com sucesso!');
+      // 5. Carregar histórico OEE do backend
+      await get().fetchOeeHistory('1h');
+      
+      console.log('🏪 Store: Dashboard inicializado com sucesso usando dados do backend!');
+      set({ isLoading: false });
     } catch (error) {
-      console.error('🏪 Store: Erro ao inicializar dashboard (tratado silenciosamente):', error);
+      console.error('🏪 Store: Erro ao inicializar dashboard com dados do backend (tratado silenciosamente):', error);
       // Não definir erro no estado - tratamento silencioso
       set({ isLoading: false });
     }
   },
 
   fetchLiveData: async () => {
-    const { wbmsService, currentShift } = get();
-    // console.log('🔄 Store: Buscando dados em tempo real WBMS...', { 
-    //   currentShift: currentShift?.name
-    // });
+    const { automaticProductionService, currentShift } = get();
+    const { deviceSettings } = useDeviceSettingsStore.getState();
     
-    // Só fazer chamadas se há um turno atual
-    if (!currentShift) {
-      // console.log('🔄 Store: Turno não definido, pulando busca de dados');
+    // Verificar se já está carregando para evitar chamadas duplicadas
+    const currentState = get();
+    if (currentState.isLoading) {
+      console.log('🔄 Store: Já está carregando, pulando chamada duplicada');
+      return;
+    }
+    
+    // Verificar turno silenciosamente se necessário
+    await get().checkShiftIfNeeded();
+    
+    // Obter turno atualizado após verificação
+    const updatedCurrentShift = get().currentShift;
+    
+    // Só fazer chamadas se há um turno atual e linha configurada
+    if (!updatedCurrentShift || !deviceSettings.isConfigured || !deviceSettings.lineId) {
       return;
     }
     
     try {
-      // Usar equipamento padrão do WBMS
-      const equipmentId = await wbmsService.getDefaultEquipment();
+      // Buscar dados de produção em tempo real do backend
+      const productionData = await automaticProductionService.getLiveProductionData(deviceSettings.lineId);
+      const liveMetrics = automaticProductionService.convertToLiveMetrics(productionData);
       
-      const liveData = await wbmsService.getLiveData(equipmentId);
-      const liveMetrics = wbmsService.convertToLiveMetrics(liveData);
-      const machineStatus = wbmsService.getMachineStatus(liveData);
+      // Determinar status da máquina baseado nos dados de produção
+      let machineStatus: MachineStatus = MachineStatus.RUNNING;
+      if (productionData) {
+        // Se há dados de produção e tempo de parada é maior que tempo de produção, máquina está parada
+        if (productionData.down_time > productionData.run_time) {
+          machineStatus = MachineStatus.DOWN;
+        } else if (productionData.run_time > 0) {
+          machineStatus = MachineStatus.RUNNING;
+        } else {
+          machineStatus = MachineStatus.STANDBY;
+        }
+      } else {
+        machineStatus = MachineStatus.STANDBY;
+      }
       
-      // console.log('🔄 Store: Dados em tempo real recebidos:', { liveData, liveMetrics, machineStatus });
+      console.log('🔄 Store: Dados em tempo real recebidos do backend:', { 
+        productionData, 
+        liveMetrics, 
+        machineStatus 
+      });
       
       // Só atualizar o status da máquina se não há um evento de parada em andamento
-      const currentState = get();
-      const shouldUpdateMachineStatus = !currentState.currentDowntimeEventId || machineStatus !== 'DOWN';
+      const shouldUpdateMachineStatus = !currentState.currentDowntimeEventId || machineStatus !== MachineStatus.DOWN;
       
-      // console.log('🔄 Store: Verificando atualização de status:', {
-      //   currentMachineStatus: currentState.machineStatus,
-      //   newMachineStatus: machineStatus,
-      //   hasDowntimeEvent: !!currentState.currentDowntimeEventId,
-      //   shouldUpdate: shouldUpdateMachineStatus
-      // });
+      console.log('🔄 Store: Verificando atualização de status:', {
+        currentMachineStatus: currentState.machineStatus,
+        newMachineStatus: machineStatus,
+        hasDowntimeEvent: !!currentState.currentDowntimeEventId,
+        shouldUpdate: shouldUpdateMachineStatus
+      });
       
       set({ 
         liveMetrics,
-        machineStatus: shouldUpdateMachineStatus ? (machineStatus as MachineStatus) : currentState.machineStatus,
+        machineStatus: shouldUpdateMachineStatus ? machineStatus : currentState.machineStatus,
         error: null
       });
 
       // Verificar se houve transição para parada (de status ativo para DOWN)
       const updatedState = get();
       const previousMachineStatus = currentState.machineStatus;
-      const isTransitionToDown = machineStatus === 'DOWN' && 
-        previousMachineStatus !== 'DOWN' && 
-        ['RUNNING', 'PAUSED', 'SETUP', 'STANDBY'].includes(previousMachineStatus);
+      const isTransitionToDown = machineStatus === MachineStatus.DOWN && 
+        previousMachineStatus !== MachineStatus.DOWN && 
+        [MachineStatus.RUNNING, MachineStatus.PAUSED, MachineStatus.SETUP, MachineStatus.STANDBY].includes(previousMachineStatus);
       
       // Se a máquina parou E não estamos já na tela de parada E não há um evento de parada em andamento E houve transição
       if (isTransitionToDown && updatedState.view !== ViewState.STOP_REASON && !updatedState.currentDowntimeEventId) {
-        // console.log('🔄 Store: Transição para parada detectada, mostrando modal de motivo...', {
-        //   previousStatus: previousMachineStatus,
-        //   newStatus: machineStatus
-        // });
+        console.log('🔄 Store: Transição para parada detectada, mostrando modal de motivo...', {
+          previousStatus: previousMachineStatus,
+          newStatus: machineStatus
+        });
         const currentView = updatedState.view;
         const newEventId = `evt${Date.now()}`;
         set({ 
@@ -370,16 +393,17 @@ export const useProductionStore = create<ProductionState>()(
             ...updatedState.downtimeHistory
           ]
         });
-      } else if (machineStatus === 'DOWN' && updatedState.currentDowntimeEventId) {
-        // console.log('🔄 Store: Máquina ainda parada, evento já registrado:', updatedState.currentDowntimeEventId);
-      } else if (machineStatus === 'DOWN' && updatedState.view === ViewState.STOP_REASON) {
-        // console.log('🔄 Store: Máquina parada, já na tela de parada');
-      } else if (machineStatus === 'DOWN' && !isTransitionToDown) {
-        // console.log('🔄 Store: Máquina já estava parada, não é uma transição');
+      } else if (machineStatus === MachineStatus.DOWN && updatedState.currentDowntimeEventId) {
+        console.log('🔄 Store: Máquina ainda parada, evento já registrado:', updatedState.currentDowntimeEventId);
+      } else if (machineStatus === MachineStatus.DOWN && updatedState.view === ViewState.STOP_REASON) {
+        console.log('🔄 Store: Máquina parada, já na tela de parada');
+      } else if (machineStatus === MachineStatus.DOWN && !isTransitionToDown) {
+        console.log('🔄 Store: Máquina já estava parada, não é uma transição');
       }
     } catch (error) {
-      console.error('🔄 Store: Erro ao buscar dados em tempo real (tratado silenciosamente):', error);
+      console.error('🔄 Store: Erro ao buscar dados em tempo real do backend (tratado silenciosamente):', error);
       // Não definir erro no estado - tratamento silencioso
+      // Não fazer re-throw para evitar propagação de erro
     }
   },
 
@@ -519,10 +543,9 @@ export const useProductionStore = create<ProductionState>()(
   },
 
   loadRealShifts: async () => {
-    const { option7ApiService } = get();
     const { deviceSettings } = useDeviceSettingsStore.getState();
     
-    console.log('🔄 Store: Carregando turnos da API Option7...');
+    console.log('🔄 Store: Carregando turnos da API Juliia...');
     set({ isLoading: true, error: null });
     
     try {
@@ -532,46 +555,33 @@ export const useProductionStore = create<ProductionState>()(
         return false;
       }
 
-      // Buscar turnos da API Option7
-      const workshifts = await option7ApiService.getWorkshifts();
+      // Usar o serviço de turnos para carregar dados
+      const workshifts = await ShiftsService.loadShiftsForInitialSetup(
+        deviceSettings.plantId,
+        deviceSettings.sectorId,
+        deviceSettings.lineId
+      );
       
       // Converter para formato do store
-      const realShifts: Shift[] = workshifts.map(workshift => ({
-        id: workshift.id.toString(),
-        name: workshift.nome,
-        startTime: '08:00', // Horários padrão - API não fornece
-        endTime: '18:00', // Horários padrão - API não fornece
-        isActive: true, // Assumir ativo - API não fornece
-        shiftNumberKey: workshift.id
-      }));
+      const realShifts: Shift[] = workshifts.map(workshift => 
+        ShiftsService.convertToStoreFormat(workshift)
+      );
       
-      console.log('✅ Store: Turnos carregados da API Option7:', realShifts);
+      console.log('✅ Store: Turnos carregados da API Juliia:', realShifts);
       
-      // Detectar turno atual baseado no horário
-      const now = new Date();
-      const currentTime = now.getHours() * 60 + now.getMinutes();
+      // Detectar turno atual usando o serviço
+      const currentWorkshift = ShiftsService.detectCurrentShift(workshifts);
+      let currentShift = null;
       
-      let currentShift = realShifts.find(shift => {
-        const [startHour, startMin] = shift.startTime.split(':').map(Number);
-        const [endHour, endMin] = shift.endTime.split(':').map(Number);
-        
-        const shiftStartMinutes = startHour * 60 + startMin;
-        const shiftEndMinutes = endHour * 60 + endMin;
-        
-        // Lidar com turnos que passam da meia-noite
-        if (shiftEndMinutes < shiftStartMinutes) {
-          return currentTime >= shiftStartMinutes || currentTime < shiftEndMinutes;
-        } else {
-          return currentTime >= shiftStartMinutes && currentTime < shiftEndMinutes;
-        }
-      });
-      
-      if (currentShift) {
+      if (currentWorkshift) {
+        currentShift = ShiftsService.convertToStoreFormat(currentWorkshift);
         console.log('✅ Store: Turno atual detectado:', currentShift.name);
       } else {
         console.log('⚠️ Store: Nenhum turno ativo encontrado para o horário atual');
         // Usar primeiro turno como fallback
+        if (realShifts.length > 0) {
         currentShift = realShifts[0];
+        }
       }
       
       set({
@@ -582,22 +592,33 @@ export const useProductionStore = create<ProductionState>()(
       
       return true;
     } catch (error) {
-      console.error('❌ Store: Erro ao carregar turnos da API Option7:', error);
+      console.error('❌ Store: Erro ao carregar turnos da API Juliia:', error);
       set({ isLoading: false, error: 'Erro ao carregar turnos' });
       return false;
     }
   },
 
   fetchOeeHistory: async (period: string = '1h') => {
-    const { dashboardService, currentShift } = get();
-    // console.log('📊 Store: Buscando histórico OEE...', { period, currentShift: currentShift?.name });
+    const { automaticProductionService } = get();
+    const { deviceSettings } = useDeviceSettingsStore.getState();
+    
+    console.log('📊 Store: Buscando histórico OEE do backend...', { 
+      period, 
+      lineId: deviceSettings.lineId 
+    });
     
     try {
-      const historyData = await dashboardService.getOeeHistory(currentShift, period);
+      if (!deviceSettings.isConfigured || !deviceSettings.lineId) {
+        console.log('⚠️ Dispositivo não configurado, não é possível buscar histórico OEE');
+        set({ oeeHistory: null });
+        return;
+      }
+      
+      const historyData = await automaticProductionService.getOeeHistory(deviceSettings.lineId, period);
       set({ oeeHistory: historyData });
-      // console.log('✅ Store: Histórico OEE carregado:', historyData);
+      console.log('✅ Store: Histórico OEE carregado do backend:', historyData);
     } catch (error) {
-      // console.error('❌ Store: Erro ao buscar histórico OEE:', error);
+      console.error('❌ Store: Erro ao buscar histórico OEE do backend:', error);
       // Em caso de erro, definir dados vazios
       set({ oeeHistory: null });
     }
@@ -1143,60 +1164,112 @@ export const useProductionStore = create<ProductionState>()(
 
   // Novo método para carregar Production Details
   loadProductionDetails: async (shiftId?: string) => {
-    const { shiftService } = get();
+    const { automaticProductionService } = get();
     const { deviceSettings } = useDeviceSettingsStore.getState();
     
-    console.log('🔍 Store: Carregando Production Details...', { shiftId });
+    console.log('🔍 Store: Carregando Production Details do backend...', { shiftId });
     
     try {
-      if (!deviceSettings.isConfigured) {
+      if (!deviceSettings.isConfigured || !deviceSettings.lineId) {
         console.log('⚠️ Dispositivo não configurado, não é possível carregar Production Details');
         set({ productionDetails: null });
         return;
       }
 
-      // Se não foi fornecido shiftId, usar o turno atual ou buscar turno ativo
-      let targetShiftId = shiftId;
-      if (!targetShiftId) {
-        const currentShift = get().currentShift;
-        if (currentShift) {
-          targetShiftId = currentShift.id;
-        } else {
-          // Buscar turno ativo para a linha
-          const activeShift = await shiftService.getActiveShift(deviceSettings.lineId);
-          if (activeShift) {
-            targetShiftId = activeShift.id;
-          } else {
-            console.log('⚠️ Nenhum turno ativo encontrado');
-            set({ productionDetails: null });
-            return;
-          }
-        }
-      }
-
-      // Buscar detalhes do turno
-      const shiftDetails = await shiftService.getShiftDetails(targetShiftId);
+      // Buscar dados de produção ativa do backend
+      const productionData = await automaticProductionService.getLiveProductionData(deviceSettings.lineId);
       
-      // Mapear dados conforme o guia fornecido
+      if (productionData) {
+        // Mapear dados do backend para o formato esperado pelo frontend
+        const productionDetails = {
+          turno: productionData.shift_id || 'Turno Ativo',
+          ordemProducao: `OP-${productionData.id}`,
+          quantidadeOP: productionData.total_count,
+          productCode: productionData.id, // Usar ID como código do produto
+          productId: productionData.shift_id, // Usar shift_id como ID do produto
+          operator: 'Operador', // Valor padrão - backend não fornece
+          line: deviceSettings.lineId,
+          shiftTarget: 1000 // Meta padrão - backend não fornece
+        };
+        
+        set({ productionDetails });
+        console.log('✅ Store: Production Details carregados do backend:', productionDetails);
+      } else {
+        // Se não há dados de produção ativa, criar dados padrão
       const productionDetails = {
-        turno: shiftDetails.shift.name,
-        ordemProducao: shiftDetails.productionOrder.id,
-        quantidadeOP: shiftDetails.productionOrder.totalQuantity,
-        productCode: shiftDetails.product.code,
-        productId: shiftDetails.product.name,
-        operator: shiftDetails.operator.name,
-        line: shiftDetails.line.name,
-        shiftTarget: shiftDetails.productionOrder.shiftTarget
+          turno: 'Turno Ativo',
+          ordemProducao: 'N/A',
+          quantidadeOP: 0,
+          productCode: 'N/A',
+          productId: 'N/A',
+          operator: 'Operador',
+          line: deviceSettings.lineId,
+          shiftTarget: 1000
       };
       
       set({ productionDetails });
-      console.log('✅ Store: Production Details carregados:', productionDetails);
+        console.log('⚠️ Store: Nenhum dado de produção ativa, usando dados padrão:', productionDetails);
+      }
       
     } catch (error) {
-      console.error('❌ Store: Erro ao carregar Production Details (tratado silenciosamente):', error);
+      console.error('❌ Store: Erro ao carregar Production Details do backend (tratado silenciosamente):', error);
       // Não definir erro no estado - tratamento silencioso
       set({ productionDetails: null });
     }
+  },
+
+  // Métodos para controle de verificação de turno
+  checkShiftIfNeeded: async () => {
+    const { currentShift, lastShiftCheck, shouldCheckShift } = get();
+    const now = Date.now();
+    
+    // Se não precisa verificar, retorna
+    if (!shouldCheckShift) {
+      return;
+    }
+    
+    // Se já verificou recentemente (menos de 5 minutos), retorna
+    if (lastShiftCheck && (now - lastShiftCheck) < 5 * 60 * 1000) {
+      return;
+    }
+    
+    // Se não há turno atual, precisa verificar
+    if (!currentShift) {
+      await get().loadRealShifts();
+      set({ lastShiftCheck: now, shouldCheckShift: false });
+      return;
+    }
+    
+    // Verificar se o turno atual ainda é válido
+    const currentTime = new Date();
+    const currentHour = currentTime.getHours();
+    const currentMinute = currentTime.getMinutes();
+    const currentTimeMinutes = currentHour * 60 + currentMinute;
+    
+    const [startHour, startMin] = currentShift.startTime.split(':').map(Number);
+    const [endHour, endMin] = currentShift.endTime.split(':').map(Number);
+    const shiftStartMinutes = startHour * 60 + startMin;
+    const shiftEndMinutes = endHour * 60 + endMin;
+    
+    let isShiftValid = false;
+    
+    // Lidar com turnos que passam da meia-noite
+    if (shiftEndMinutes < shiftStartMinutes) {
+      isShiftValid = currentTimeMinutes >= shiftStartMinutes || currentTimeMinutes < shiftEndMinutes;
+    } else {
+      isShiftValid = currentTimeMinutes >= shiftStartMinutes && currentTimeMinutes < shiftEndMinutes;
+    }
+    
+    if (!isShiftValid) {
+      await get().loadRealShifts();
+      set({ lastShiftCheck: now, shouldCheckShift: false });
+    } else {
+      set({ lastShiftCheck: now, shouldCheckShift: false });
+    }
+  },
+
+  markShiftCheckNeeded: () => {
+    set({ shouldCheckShift: true });
   },
     }),
     {
