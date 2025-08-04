@@ -2,11 +2,11 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "http://staging.option7.ai/api/$1"
+      "destination": "https://staging.option7.ai/api/$1"
     },
     {
       "source": "/automatic-production/(.*)",
-      "destination": "http://staging.option7.ai/automatic-production/$1"
+      "destination": "https://staging.option7.ai/automatic-production/$1"
     }
   ],
   "headers": [
@@ -15,7 +15,7 @@
       "headers": [
         {
           "key": "Access-Control-Allow-Origin",
-          "value": "*"
+          "value": "https://m.option7.ai"
         },
         {
           "key": "Access-Control-Allow-Methods",
@@ -23,7 +23,19 @@
         },
         {
           "key": "Access-Control-Allow-Headers",
-          "value": "Content-Type, Authorization, X-Requested-With"
+          "value": "Content-Type, Authorization, X-Requested-With, Origin, Referer"
+        },
+        {
+          "key": "Access-Control-Allow-Credentials",
+          "value": "true"
+        },
+        {
+          "key": "Origin",
+          "value": "https://m.option7.ai"
+        },
+        {
+          "key": "Referer",
+          "value": "https://m.option7.ai/"
         }
       ]
     },
@@ -32,7 +44,7 @@
       "headers": [
         {
           "key": "Access-Control-Allow-Origin",
-          "value": "*"
+          "value": "https://m.option7.ai"
         },
         {
           "key": "Access-Control-Allow-Methods",
@@ -40,7 +52,19 @@
         },
         {
           "key": "Access-Control-Allow-Headers",
-          "value": "Content-Type, Authorization, X-Requested-With"
+          "value": "Content-Type, Authorization, X-Requested-With, Origin, Referer"
+        },
+        {
+          "key": "Access-Control-Allow-Credentials",
+          "value": "true"
+        },
+        {
+          "key": "Origin",
+          "value": "https://m.option7.ai"
+        },
+        {
+          "key": "Referer",
+          "value": "https://m.option7.ai/"
         }
       ]
     }

@@ -18,10 +18,19 @@ const getOriginHeaders = (): Partial<{ Origin: string; Referer: string }> => {
     console.log('🔧 Headers de origem: omitidos (desenvolvimento com proxy)');
     return {};
   } else {
-    // Em produção/staging/Vercel, NÃO enviar headers de origem
-    // Deixar o navegador enviar os headers corretos automaticamente
-    // Isso evita conflitos de CORS quando o servidor espera origens específicas
-    console.log('🔧 Headers de origem: omitidos (produção/staging/vercel) - deixando navegador gerenciar');
+    // Em produção/staging/Vercel, simular a origem esperada pelo servidor da Option7
+    const hostname = window.location.hostname;
+    
+    if (hostname.includes('vercel.app')) {
+      console.log('🔧 Headers de origem: simulando m.option7.ai para Vercel');
+      return {
+        'Origin': 'https://m.option7.ai',
+        'Referer': 'https://m.option7.ai/'
+      };
+    }
+    
+    // Para outros ambientes, deixar o navegador gerenciar
+    console.log('🔧 Headers de origem: omitidos (outros ambientes) - deixando navegador gerenciar');
     return {};
   }
 };

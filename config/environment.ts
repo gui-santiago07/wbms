@@ -40,6 +40,8 @@ const getCurrentEnvironment = (): string => {
     return envParam;
   }
 
+  //teste
+
   // 🔧 2. Usar window.location.hostname para detectar ambiente
   const hostname = window.location.hostname;
   if (hostname === 'localhost' || hostname === '127.0.0.1') return 'development';
