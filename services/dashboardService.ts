@@ -211,12 +211,10 @@ class DashboardService extends ApiClient {
   // Buscar detalhes do turno
   async getShiftDetails(currentShift: Shift | null): Promise<ShiftDetailsResponse> {
     const targetShiftId = this.getShiftId(currentShift);
-    console.log('🔍 Buscando detalhes do turno:', { currentShift: currentShift?.name, targetShiftId });
     
     try {
       // ✅ Usar endpoint correto da API Option7
       const result = await this.get<ShiftDetailsResponse>(`/timesheets/${targetShiftId}`);
-      console.log('✅ Detalhes do turno carregados:', result);
       return result;
     } catch (error) {
       console.error(`❌ Erro ao buscar detalhes do turno ${targetShiftId}:`, error);
@@ -227,12 +225,10 @@ class DashboardService extends ApiClient {
   // Buscar status em tempo real
   async getShiftStatus(currentShift: Shift | null, historyRange: string = '4h'): Promise<ShiftStatusResponse> {
     const targetShiftId = this.getShiftId(currentShift);
-    console.log('📊 Buscando status do turno:', { currentShift: currentShift?.name, targetShiftId, historyRange });
     
     try {
       // ✅ Usar endpoint correto da API Option7 - buscar jobs do timesheet
       const result = await this.get<ShiftStatusResponse>(`/timesheets/${targetShiftId}/jobs`);
-      console.log('✅ Status do turno carregado:', result);
       return result;
     } catch (error) {
       console.error(`❌ Erro ao buscar status do turno ${targetShiftId}:`, error);
@@ -243,7 +239,6 @@ class DashboardService extends ApiClient {
   // Registrar evento (atualizado para incluir RUN)
   async registerEvent(currentShift: Shift | null, eventType: 'DOWN' | 'SETUP' | 'PAUSE' | 'RUN' | 'ASSISTANCE_REQUEST', description?: string): Promise<EventResponse> {
     const targetShiftId = this.getShiftId(currentShift);
-    console.log('🎯 Registrando evento:', { currentShift: currentShift?.name, targetShiftId, eventType, description });
     
     try {
       // ✅ Usar API Mobile recomendada: POST /api/shifts/{shiftId}/events
@@ -257,14 +252,12 @@ class DashboardService extends ApiClient {
       }
       
       const result = await this.post<EventResponse>(`/shifts/${targetShiftId}/events`, eventData);
-      console.log('✅ Evento registrado com sucesso via API Mobile:', result);
       return result;
     } catch (error) {
       console.error(`❌ Erro ao registrar evento ${eventType} no turno ${targetShiftId}:`, error);
       
       // Fallback para API geral se a Mobile falhar
       try {
-        console.log('🔄 Tentando fallback para API geral...');
         const fallbackResult = await this.post<EventResponse>(`/timesheet_events`, { 
           shift_number_key: targetShiftId,
           tipo: eventType,
@@ -272,7 +265,6 @@ class DashboardService extends ApiClient {
           timeline_start_time: new Date().toISOString().slice(0, 19).replace('T', ' '), // YYYY-MM-DD HH:mm:ss
           timeline_end_time: new Date().toISOString().slice(0, 19).replace('T', ' ') // YYYY-MM-DD HH:mm:ss
         });
-        console.log('✅ Evento registrado com sucesso via API geral (fallback):', fallbackResult);
         return fallbackResult;
       } catch (fallbackError) {
         console.error(`❌ Erro no fallback também:`, fallbackError);
@@ -286,7 +278,7 @@ class DashboardService extends ApiClient {
     const targetShiftId = this.getShiftId(currentShift);
     const eventDescription = reasonId ? `${reason} (ID: ${reasonId})` : reason;
     
-    console.log('🛑 Registrando parada com motivo:', { 
+    console.log('🔄 DashboardService: Registrando parada:', {
       currentShift: currentShift?.name, 
       targetShiftId, 
       reason, 
@@ -302,14 +294,12 @@ class DashboardService extends ApiClient {
       };
       
       const result = await this.post<EventResponse>(`/shifts/${targetShiftId}/events`, eventData);
-      console.log('✅ Parada registrada com sucesso via API Mobile:', result);
       return result;
     } catch (error) {
       console.error(`❌ Erro ao registrar parada no turno ${targetShiftId}:`, error);
       
       // Fallback para API geral se a Mobile falhar
       try {
-        console.log('🔄 Tentando fallback para API geral...');
         const fallbackResult = await this.post<EventResponse>(`/timesheet_events`, { 
           shift_number_key: targetShiftId,
           tipo: 'STOP',
@@ -317,7 +307,6 @@ class DashboardService extends ApiClient {
           timeline_start_time: new Date().toISOString().slice(0, 19).replace('T', ' '), // YYYY-MM-DD HH:mm:ss
           timeline_end_time: new Date().toISOString().slice(0, 19).replace('T', ' ') // YYYY-MM-DD HH:mm:ss
         });
-        console.log('✅ Parada registrada com sucesso via API geral (fallback):', fallbackResult);
         return fallbackResult;
       } catch (fallbackError) {
         console.error(`❌ Erro no fallback também:`, fallbackError);
@@ -405,20 +394,17 @@ class DashboardService extends ApiClient {
     productionLine: ProductionLine;
     shift: Shift;
   }> {
-    console.log('🚀 Iniciando carregamento do dashboard...');
-    console.log('🔧 Configuração:', {
+    console.log('🔄 DashboardService: Inicializando dados do dashboard:', {
       currentShift: currentShift?.name,
       shiftId: this.getShiftId(currentShift)
     });
     
     try {
-      console.log('📋 Fazendo requisições paralelas...');
       const [details, status] = await Promise.all([
         this.getShiftDetails(currentShift),
         this.getShiftStatus(currentShift)
       ]);
 
-      console.log('🔄 Convertendo dados...');
       const result = {
         liveMetrics: this.convertToLiveMetrics(status),
         currentJob: this.convertToCurrentJob(details),
@@ -426,7 +412,6 @@ class DashboardService extends ApiClient {
         shift: this.convertToShift(details),
       };
 
-      console.log('✅ Dashboard inicializado com sucesso:', result);
       return result;
     } catch (error) {
       console.error('❌ Erro ao inicializar dados do dashboard:', error);
@@ -442,12 +427,10 @@ class DashboardService extends ApiClient {
     trendColor: string;
   }> {
     const targetShiftId = this.getShiftId(currentShift);
-    console.log('📊 Service: Buscando histórico OEE para turno:', targetShiftId, 'período:', period);
     
     try {
       // ✅ Usar endpoint correto da API Option7 - buscar eventos do timesheet
       const result = await this.get<OeeHistoryResponse>(`/timesheet_events/${targetShiftId}`);
-      console.log('✅ Service: Histórico OEE carregado:', result.oeeHistory);
       return result.oeeHistory;
     } catch (error) {
       console.error('❌ Service: Erro ao buscar histórico OEE:', error);
@@ -465,11 +448,9 @@ class DashboardService extends ApiClient {
   async getProductionTimeline(currentShift: Shift | null): Promise<ProductionTimelineResponse['productionTimeline']> {
     try {
       const targetShiftId = this.getShiftId(currentShift);
-      console.log('📊 Service: Buscando timeline de produção para turno:', targetShiftId);
       
       // ✅ Usar endpoint correto da API Option7
       const result = await this.get<ProductionTimelineResponse>(`/timesheet_events/${targetShiftId}`);
-      console.log('✅ Service: Timeline de produção carregada:', result.productionTimeline);
       return result.productionTimeline;
     } catch (error) {
       console.error('❌ Service: Erro ao buscar timeline de produção:', error);
@@ -480,12 +461,10 @@ class DashboardService extends ApiClient {
   // Novo método para obter distribuição de tempo
   async getTimeDistribution(currentShift: Shift | null): Promise<TimeDistributionResponse['timeDistribution']> {
     const targetShiftId = this.getShiftId(currentShift);
-    console.log('📊 Service: Buscando distribuição de tempo para turno:', targetShiftId);
     
     try {
       // ✅ Usar endpoint correto da API Option7 - buscar detalhes do timesheet
       const result = await this.get<TimeDistributionResponse>(`/timesheets/${targetShiftId}`);
-      console.log('✅ Service: Distribuição de tempo carregada:', result.timeDistribution);
       return result.timeDistribution;
     } catch (error) {
       console.error('❌ Service: Erro ao buscar distribuição de tempo:', error);
@@ -502,12 +481,10 @@ class DashboardService extends ApiClient {
   // Novo método para obter principais motivos de parada
   async getTopStopReasons(currentShift: Shift | null): Promise<TopStopReasonsResponse['topStopReasons']> {
     const targetShiftId = this.getShiftId(currentShift);
-    console.log('📊 Service: Buscando principais motivos de parada para turno:', targetShiftId);
     
     try {
       // ✅ Usar endpoint correto da API Option7 - buscar eventos do timesheet
       const result = await this.get<TopStopReasonsResponse>(`/timesheet_events/${targetShiftId}`);
-      console.log('✅ Service: Principais motivos de parada carregados:', result.topStopReasons);
       return result.topStopReasons;
     } catch (error) {
       console.error('❌ Service: Erro ao buscar principais motivos de parada:', error);
@@ -518,12 +495,10 @@ class DashboardService extends ApiClient {
   // Novo método para obter histórico de paradas
   async getDowntimeHistory(currentShift: Shift | null): Promise<DowntimeHistoryResponse['downtimeHistory']> {
     const targetShiftId = this.getShiftId(currentShift);
-    console.log('📊 Service: Buscando histórico de paradas para turno:', targetShiftId);
     
     try {
       // ✅ Usar endpoint correto da API Option7 - buscar eventos do timesheet
       const result = await this.get<DowntimeHistoryResponse>(`/timesheet_events/${targetShiftId}`);
-      console.log('✅ Service: Histórico de paradas carregado:', result.downtimeHistory);
       return result.downtimeHistory;
     } catch (error) {
       console.error('❌ Service: Erro ao buscar histórico de paradas:', error);
@@ -534,12 +509,10 @@ class DashboardService extends ApiClient {
   // Método principal para obter dados compostos do dashboard (BFF - Backend for Frontend)
   async getDashboardComposite(currentShift: Shift | null): Promise<DashboardCompositeResponse> {
     const targetShiftId = this.getShiftId(currentShift);
-    console.log('📊 Service: Buscando dados compostos do dashboard para turno:', targetShiftId);
     
     try {
       // ✅ Usar endpoint correto da API Option7 - buscar dados do timesheet
       const result = await this.get<DashboardCompositeResponse>(`/timesheets/${targetShiftId}`);
-      console.log('✅ Service: Dados compostos do dashboard carregados:', result);
       return result;
     } catch (error) {
       console.error('❌ Service: Erro ao buscar dados compostos do dashboard:', error);
@@ -556,7 +529,6 @@ class DashboardService extends ApiClient {
     isActive: boolean;
   }>> {
     try {
-      console.log('📊 Service: Buscando lista de dispositivos');
       
       // ✅ Usar endpoint correto da API Option7 - buscar linhas de produção
       const result = await this.get<Array<{
@@ -566,7 +538,6 @@ class DashboardService extends ApiClient {
         productionLineId: string | number;
         isActive: boolean;
       }>>('/lines?useIds=true');
-      console.log('✅ Service: Lista de dispositivos carregada:', result);
       return result;
     } catch (error) {
       console.error('❌ Service: Erro ao buscar lista de dispositivos:', error);

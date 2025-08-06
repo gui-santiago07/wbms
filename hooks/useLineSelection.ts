@@ -31,7 +31,6 @@ export const useLineSelection = () => {
   // Confirmar seleção de linha
   const confirmLineSelection = useCallback((line: Line) => {
     setSelectedLine(line);
-    console.log('✅ Linha selecionada via hook:', line);
   }, []);
 
   // Verificar se precisa mostrar o modal (dispositivo não configurado)

@@ -24,7 +24,6 @@ export const useShiftDetection = () => {
 
   const detectCurrentShift = async () => {
     if (!deviceSettings.isConfigured) {
-      console.log('⚠️ Dispositivo não configurado, pulando detecção de turno');
       return;
     }
 
@@ -102,9 +101,7 @@ export const useShiftDetection = () => {
         setCurrentShift(shiftData);
         setStoreShift(shiftData as Shift);
         
-        console.log('✅ Turno detectado:', shiftData.name);
       } else {
-        console.log('⚠️ Nenhum turno ativo encontrado para o horário atual');
         setCurrentShift(null);
         // Não definir turno no store se não há turno ativo
       }

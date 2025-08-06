@@ -10,7 +10,6 @@ export const useProductionDetails = () => {
 
   useEffect(() => {
     if (currentShift?.id) {
-      console.log('🔄 Hook: Carregando Production Details para turno:', currentShift.name);
       loadProductionDetails(currentShift.id);
     }
   }, [currentShift?.id, loadProductionDetails]);

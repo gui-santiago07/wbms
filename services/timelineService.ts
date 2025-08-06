@@ -79,13 +79,11 @@ class TimelineService {
    */
   async getTimelineData(filters: TimelineFilters): Promise<TimelineData> {
     try {
-      console.log('📊 TimelineService: Buscando dados da timeline com filtros:', filters);
       
       // Simular chamada da API real
       // TODO: Implementar chamada real para POST /api/timeline
       const response = await this.simulateApiCall(filters);
       
-      console.log('✅ TimelineService: Dados da timeline carregados:', response);
       return response;
     } catch (error) {
       console.error('❌ TimelineService: Erro ao buscar dados da timeline:', error);
@@ -99,7 +97,6 @@ class TimelineService {
    */
   async getPlants(): Promise<FilterOption[]> {
     try {
-      console.log('📊 TimelineService: Buscando plantas...');
       
       // Usar API real existente
       const response = await this.apiService.getFactories();
@@ -114,7 +111,6 @@ class TimelineService {
         name: factory.name || factory.plant_name || ''
       })).filter(plant => plant.id && plant.name);
       
-      console.log('✅ TimelineService: Plantas carregadas:', plants);
       return plants;
     } catch (error) {
       console.error('❌ TimelineService: Erro ao buscar plantas:', error);
@@ -129,7 +125,6 @@ class TimelineService {
    */
   async getSectors(plantId: string): Promise<FilterOption[]> {
     try {
-      console.log('📊 TimelineService: Buscando setores para planta:', plantId);
       
       // Converter string para number para compatibilidade com a API
       const plantIdNumber = parseInt(plantId);
@@ -147,7 +142,6 @@ class TimelineService {
         name: sector.name || sector.sector || ''
       })).filter(sector => sector.id && sector.name);
       
-      console.log('✅ TimelineService: Setores carregados:', sectors);
       return sectors;
     } catch (error) {
       console.error('❌ TimelineService: Erro ao buscar setores:', error);
@@ -162,7 +156,6 @@ class TimelineService {
    */
   async getLines(sectorId: string): Promise<FilterOption[]> {
     try {
-      console.log('📊 TimelineService: Buscando linhas para setor:', sectorId);
       
       // Converter string para number para compatibilidade com a API
       const sectorIdNumber = parseInt(sectorId);
@@ -180,7 +173,6 @@ class TimelineService {
         name: line.line || line.name || ''
       })).filter(line => line.id && line.name);
       
-      console.log('✅ TimelineService: Linhas carregadas:', lines);
       return lines;
     } catch (error) {
       console.error('❌ TimelineService: Erro ao buscar linhas:', error);
@@ -195,12 +187,10 @@ class TimelineService {
    */
   async shareTimeline(data: ShareTimelineData): Promise<void> {
     try {
-      console.log('📊 TimelineService: Compartilhando timeline...');
       
       // TODO: Implementar chamada real para POST /api/timeline/sendTimeline
       await this.simulateShareCall(data);
       
-      console.log('✅ TimelineService: Timeline compartilhada com sucesso');
     } catch (error) {
       console.error('❌ TimelineService: Erro ao compartilhar timeline:', error);
       throw new Error('Erro ao compartilhar timeline');
@@ -306,9 +296,6 @@ class TimelineService {
   private async simulateShareCall(data: ShareTimelineData): Promise<void> {
     await new Promise(resolve => setTimeout(resolve, 1000));
     
-    console.log('📧 TimelineService: Simulando envio de e-mail para:', data.email);
-    console.log('📊 TimelineService: Dados do gráfico:', data.chartImage.substring(0, 100) + '...');
-    console.log('🔍 TimelineService: Filtros aplicados:', data.filters);
   }
 
   // Utilitários

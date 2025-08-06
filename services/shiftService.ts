@@ -49,12 +49,10 @@ class ShiftService extends ApiClient {
 
   // Buscar lista de turnos - usando endpoint correto da API Option7
   async getShifts(page: number = 1, itemsPerPage: number = 10): Promise<ShiftResponse[]> {
-    console.log('🔍 Buscando turnos...', { page, itemsPerPage });
     
     try {
       // ✅ Usar endpoint correto da API Option7
       const result = await this.get<ShiftListResponse>(`/workshifts?page=${page}&itemsPerPage=${itemsPerPage}`);
-      console.log('✅ Turnos carregados:', result.data);
       return result.data;
     } catch (error) {
       console.error('❌ Erro ao buscar turnos:', error);
@@ -91,7 +89,6 @@ class ShiftService extends ApiClient {
   async getShiftById(shiftId: string): Promise<ShiftResponse> {
     try {
       const result = await this.get<ShiftResponse>(`/workshifts/${shiftId}`);
-      console.log('✅ Turno carregado:', result);
       return result;
     } catch (error) {
       console.error('❌ Erro ao buscar turno:', error);
@@ -103,7 +100,6 @@ class ShiftService extends ApiClient {
   async getActiveShifts(): Promise<ShiftResponse[]> {
     try {
       const result = await this.get<ShiftListResponse>('/workshifts?is_active=true');
-      console.log('✅ Turnos ativos carregados:', result.data);
       return result.data;
     } catch (error) {
       console.error('❌ Erro ao buscar turnos ativos:', error);
@@ -120,7 +116,6 @@ class ShiftService extends ApiClient {
   }): Promise<ShiftResponse> {
     try {
       const result = await this.post<ShiftResponse>('/workshifts', shiftData);
-      console.log('✅ Turno criado:', result);
       return result;
     } catch (error) {
       console.error('❌ Erro ao criar turno:', error);
@@ -132,7 +127,6 @@ class ShiftService extends ApiClient {
   async updateShift(shiftId: string, shiftData: Partial<ShiftResponse>): Promise<ShiftResponse> {
     try {
       const result = await this.patch<ShiftResponse>(`/workshifts/${shiftId}`, shiftData);
-      console.log('✅ Turno atualizado:', result);
       return result;
     } catch (error) {
       console.error('❌ Erro ao atualizar turno:', error);
@@ -144,7 +138,6 @@ class ShiftService extends ApiClient {
   async deleteShift(shiftId: string): Promise<void> {
     try {
       await this.delete(`/workshifts/${shiftId}`);
-      console.log('✅ Turno deletado:', shiftId);
     } catch (error) {
       console.error('❌ Erro ao deletar turno:', error);
       throw new Error(`Falha ao deletar turno: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
@@ -175,11 +168,9 @@ class ShiftService extends ApiClient {
       });
 
       if (activeShift) {
-        console.log('✅ Turno atual detectado:', activeShift.name);
         return activeShift;
       }
 
-      console.log('⚠️ Nenhum turno ativo encontrado para o horário atual');
       return null;
     } catch (error) {
       console.error('❌ Erro ao detectar turno atual:', error);
@@ -189,12 +180,10 @@ class ShiftService extends ApiClient {
 
   // Buscar detalhes completos de um turno específico
   async getShiftDetails(shiftId: string): Promise<ShiftDetailsResponse> {
-    console.log('🔍 Buscando detalhes do turno...', { shiftId });
     
     try {
       // ✅ Usar endpoint correto da API Option7 para detalhes do turno
       const result = await this.get<ShiftDetailsResponse>(`/workshifts/${shiftId}/details`);
-      console.log('✅ Detalhes do turno carregados:', result);
       return result;
     } catch (error) {
       console.error('❌ Erro ao buscar detalhes do turno:', error);
@@ -224,7 +213,6 @@ class ShiftService extends ApiClient {
       }
       
       // Retornar dados mockados em caso de erro para desenvolvimento
-      console.log('⚠️ Retornando dados mockados para desenvolvimento');
       return {
         shift: {
           id: shiftId,
@@ -256,7 +244,6 @@ class ShiftService extends ApiClient {
   async getActiveShift(lineId: string): Promise<ShiftResponse | null> {
     try {
       const result = await this.get<ShiftResponse>(`/workshifts/active?line=${lineId}`);
-      console.log('✅ Turno ativo carregado:', result);
       return result;
     } catch (error) {
       console.error('❌ Erro ao buscar turno ativo:', error);

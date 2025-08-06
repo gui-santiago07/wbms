@@ -30,7 +30,6 @@ class ShiftsService {
   async getAllWorkshifts(): Promise<Workshift[]> {
     try {
       const response = await this.api.get<Workshift[]>('/workshifts');
-      console.log('📋 Todos os turnos carregados:', response);
       return response;
     } catch (error) {
       console.error('❌ Erro ao carregar todos os turnos:', error);
@@ -81,7 +80,7 @@ class ShiftsService {
       const endpoint = `/workshifts?${params.toString()}`;
       const response = await this.api.get<Workshift[]>(endpoint);
       
-      console.log('📋 Turnos carregados com filtros:', {
+      console.log('🔄 ShiftsService: Turnos carregados com filtros:', {
         filters,
         count: response.length,
         data: response
@@ -107,7 +106,7 @@ class ShiftsService {
       const endpoint = `/listar-turnos-completo?${params.toString()}`;
       const response = await this.api.get<Workshift[]>(endpoint);
       
-      console.log('📋 Turnos por empresa carregados:', {
+      console.log('🔄 ShiftsService: Turnos carregados por empresa:', {
         empresas,
         count: response.length,
         data: response
@@ -156,7 +155,7 @@ class ShiftsService {
       const endpoint = `/listar-turnos-submisso?${params.toString()}`;
       const response = await this.api.get<Workshift[]>(endpoint);
       
-      console.log('📋 Turnos para formulários carregados:', {
+      console.log('🔄 ShiftsService: Turnos carregados para formulários:', {
         filters,
         count: response.length,
         data: response
@@ -234,7 +233,7 @@ class ShiftsService {
 
       const workshifts = await this.getWorkshiftsWithFilters(filters);
       
-      console.log('📋 Turnos para configuração inicial:', {
+      console.log('🔄 ShiftsService: Turnos carregados para configuração inicial:', {
         plantId,
         sectorId,
         lineId,

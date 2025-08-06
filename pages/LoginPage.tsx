@@ -1,9 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Navigate, useNavigate } from 'react-router-dom';
-import { useDeviceSettingsStore } from '../store/useDeviceSettingsStore';
 import Card from '../components/ui/Card';
-import LineSelectionModal from '../components/features/modals/LineSelectionModal';
 
 const LoginPage: React.FC = () => {
   const [username, setUsername] = useState('');
@@ -11,10 +9,8 @@ const LoginPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [showLineSelection, setShowLineSelection] = useState(false);
   
   const { login, isAuthenticated, isLoading: authLoading } = useAuth();
-  const { deviceSettings } = useDeviceSettingsStore();
   const navigate = useNavigate();
 
   // Se já estiver autenticado, redirecionar para OEE
@@ -30,13 +26,8 @@ const LoginPage: React.FC = () => {
     try {
       const success = await login(username, password);
       if (success) {
-        // Verificar se já foi configurado
-        if (!deviceSettings.isConfigured) {
-          setShowLineSelection(true);
-        } else {
-          // Redirecionar para dashboard
-          navigate('/oee');
-        }
+        // Redirecionar diretamente para o dashboard
+        navigate('/oee');
       } else {
         setError('Credenciais inválidas. Tente novamente.');
       }
@@ -45,12 +36,6 @@ const LoginPage: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleLineSelectionComplete = (line: any) => {
-    setShowLineSelection(false);
-    console.log('✅ Linha selecionada no login:', line);
-    navigate('/oee');
   };
 
   const togglePasswordVisibility = () => {
@@ -156,12 +141,6 @@ const LoginPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Modal de Seleção de Linha */}
-      <LineSelectionModal 
-        isOpen={showLineSelection}
-        onClose={() => setShowLineSelection(false)}
-        onConfirm={handleLineSelectionComplete}
-      />
     </>
   );
 };

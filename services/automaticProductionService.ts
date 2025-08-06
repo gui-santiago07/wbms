@@ -51,7 +51,6 @@ class AutomaticProductionService {
       if (date) params.append('date', date);
       
       const response = await this.api.get<ProductionDataResponse>(`/automatic-production/data?${params}`);
-      console.log('📊 Dados de produção por linha:', response);
       return response;
     } catch (error) {
       console.error('❌ Erro ao buscar dados de produção por linha:', error);
@@ -68,7 +67,6 @@ class AutomaticProductionService {
       if (date) params.append('date', date);
       
       const response = await this.api.get<ProductionDataResponse>(`/automatic-production/data/device?${params}`);
-      console.log('📊 Dados de produção por dispositivo:', response);
       return response;
     } catch (error) {
       console.error('❌ Erro ao buscar dados de produção por dispositivo:', error);
@@ -83,7 +81,6 @@ class AutomaticProductionService {
     try {
       const params = date ? `?date=${date}` : '';
       const response = await this.api.get<ProductionDataResponse>(`/automatic-production/data/all${params}`);
-      console.log('📊 Todos os dados de produção:', response);
       return response;
     } catch (error) {
       console.error('❌ Erro ao buscar todos os dados de produção:', error);
@@ -97,7 +94,6 @@ class AutomaticProductionService {
   async getDevicesStatus(): Promise<DevicesStatusResponse> {
     try {
       const response = await this.api.get<DevicesStatusResponse>('/automatic-production/devices/status');
-      console.log('📊 Status dos dispositivos:', response);
       return response;
     } catch (error) {
       console.error('❌ Erro ao buscar status dos dispositivos:', error);
@@ -113,7 +109,6 @@ class AutomaticProductionService {
       const response = await this.api.post('/automatic-production/shifts/finalize', {
         shift_number_key: shiftNumberKey
       });
-      console.log('✅ Turno finalizado:', response);
       return response;
     } catch (error) {
       console.error('❌ Erro ao finalizar turno:', error);
@@ -126,13 +121,10 @@ class AutomaticProductionService {
    */
   async getLiveProductionData(clientLineKey: string): Promise<ProductionShift | null> {
     try {
-      console.log('📊 Buscando dados de produção para linha:', clientLineKey);
       const response = await this.getProductionByLine(clientLineKey);
       
-      console.log('📊 Resposta da API:', response);
       
       if (!response || !response.data) {
-        console.log('⚠️ Resposta vazia da API');
         return null;
       }
       
@@ -140,10 +132,8 @@ class AutomaticProductionService {
       const activeShift = response.data.find(shift => !shift.end_time);
       
       if (activeShift) {
-        console.log('📊 Turno ativo encontrado:', activeShift);
         return activeShift;
       } else {
-        console.log('⚠️ Nenhum turno ativo encontrado');
         return null;
       }
     } catch (error) {

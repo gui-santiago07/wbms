@@ -92,7 +92,6 @@ const LineSelectionModal: React.FC<LineSelectionModalProps> = ({
 
       const data = await response.json();
       setPlants(data);
-      console.log('✅ Plantas carregadas:', data);
     } catch (error) {
       console.error('❌ Erro ao carregar plantas:', error);
       setError('Erro ao carregar plantas. Tente novamente.');
@@ -129,7 +128,6 @@ const LineSelectionModal: React.FC<LineSelectionModalProps> = ({
 
       const data = await response.json();
       setSectors(data);
-      console.log('✅ Setores carregados:', data);
     } catch (error) {
       console.error('❌ Erro ao carregar setores:', error);
       setError('Erro ao carregar setores. Tente novamente.');
@@ -166,7 +164,6 @@ const LineSelectionModal: React.FC<LineSelectionModalProps> = ({
 
       const data = await response.json();
       setLines(data);
-      console.log('✅ Linhas carregadas:', data);
     } catch (error) {
       console.error('❌ Erro ao carregar linhas:', error);
       setError('Erro ao carregar linhas. Tente novamente.');
@@ -232,7 +229,6 @@ const LineSelectionModal: React.FC<LineSelectionModalProps> = ({
       onConfirm(selectedLine);
       onClose();
       
-      console.log('✅ Linha selecionada:', selectedLine);
     } catch (error) {
       console.error('❌ Erro ao salvar configurações:', error);
       setError('Erro ao salvar configurações. Tente novamente.');

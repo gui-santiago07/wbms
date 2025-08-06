@@ -491,7 +491,6 @@ const ProductionTimeline: React.FC = () => {
       
       await shareTimeline(shareData);
       
-      console.log('Timeline compartilhada com sucesso');
       setShowShareModal(false);
       setShareEmail('');
     } catch (error) {

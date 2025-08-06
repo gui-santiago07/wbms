@@ -15,14 +15,12 @@ export const useActiveShiftDetection = () => {
   // Função para detectar turno ativo baseado na hora
   const detectActiveShift = useCallback(() => {
     if (shifts.length === 0) {
-      console.log('⚠️ Nenhum turno disponível para detecção');
       return null;
     }
 
     const now = new Date();
     const currentTime = now.getHours() * 60 + now.getMinutes(); // Converter para minutos
     
-    console.log('🕐 Detectando turno ativo para hora:', now.toLocaleTimeString());
 
     // Encontrar turno ativo baseado no horário
     const activeShift = shifts.find(shift => {
@@ -41,18 +39,15 @@ export const useActiveShiftDetection = () => {
     });
 
     if (activeShift) {
-      console.log('✅ Turno ativo detectado:', activeShift.name);
       return activeShift;
     }
 
-    console.log('⚠️ Nenhum turno ativo encontrado para o horário atual');
     return null;
   }, [shifts]);
 
   // Função para buscar turno ativo da API
   const fetchActiveShiftFromAPI = useCallback(async () => {
     if (!deviceSettings.isConfigured || !deviceSettings.lineId) {
-      console.log('⚠️ Dispositivo não configurado, não é possível buscar turno ativo da API');
       return null;
     }
 
@@ -73,7 +68,6 @@ export const useActiveShiftDetection = () => {
       const data = await response.json();
       
       if (data.shift) {
-        console.log('✅ Turno ativo da API:', data.shift);
         return data.shift;
       }
       
@@ -99,7 +93,6 @@ export const useActiveShiftDetection = () => {
       
       // Se encontrou um turno ativo e é diferente do atual
       if (activeShift && (!currentShift || currentShift.id !== activeShift.id)) {
-        console.log('🔄 Atualizando turno ativo:', {
           from: currentShift?.name || 'Nenhum',
           to: activeShift.name
         });

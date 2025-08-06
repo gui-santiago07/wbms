@@ -23,7 +23,6 @@ class ProductionService {
   async checkActiveProduction(): Promise<Timesheet[]> {
     try {
       const response = await this.api.get<Timesheet[]>('/timesheets?unfinished=true');
-      console.log('🔍 Produção ativa encontrada:', response);
       return response;
     } catch (error) {
       console.error('❌ Erro ao verificar produção ativa:', error);
@@ -44,7 +43,6 @@ class ProductionService {
       }
       
       const response = await this.api.get<ProductionLine[]>(endpoint);
-      console.log('🏭 Linhas disponíveis:', response);
       return response;
     } catch (error) {
       console.error('❌ Erro ao buscar linhas disponíveis:', error);
@@ -66,7 +64,6 @@ class ProductionService {
       };
 
       const timesheet = await this.api.post<Timesheet>('/timesheets', timesheetData);
-      console.log('📋 Turno criado:', timesheet);
 
       // 2. Registrar evento de setup
       const eventData = {
@@ -75,7 +72,6 @@ class ProductionService {
       };
 
       const event = await this.api.post<ShiftEvent>(`/shifts/${timesheet.id}/events`, eventData);
-      console.log('⚙️ Evento de setup registrado:', event);
 
       return { timesheet, event };
     } catch (error) {
@@ -96,7 +92,6 @@ class ProductionService {
       };
 
       const event = await this.api.post<ShiftEvent>(`/shifts/${timesheetId}/events`, eventData);
-      console.log('🏃‍♂️ Produção iniciada:', event);
       return event;
     } catch (error) {
       console.error('❌ Erro ao iniciar produção:', error);
@@ -111,7 +106,6 @@ class ProductionService {
   async getProductionStatus(timesheetId: string, historyRange: string = '4h'): Promise<ProductionStatus> {
     try {
       const response = await this.api.get<ProductionStatus>(`/shifts/${timesheetId}/status?history_range=${historyRange}`);
-      console.log('📊 Status da produção:', response);
       return response;
     } catch (error) {
       console.error('❌ Erro ao buscar status da produção:', error);
@@ -132,14 +126,12 @@ class ProductionService {
       };
 
       const event = await this.api.post<ShiftEvent>(`/shifts/${timesheetId}/events`, eventData);
-      console.log('🛑 Produção parada:', event);
 
       // 2. Finalizar o turno
       const timesheet = await this.api.patch<Timesheet>(`/timesheets/${timesheetId}`, {
         end_time: new Date().toISOString(),
         is_finished: true
       });
-      console.log('📋 Turno finalizado:', timesheet);
 
       return { event, timesheet };
     } catch (error) {
@@ -154,7 +146,6 @@ class ProductionService {
   async getAvailableProducts(): Promise<Product[]> {
     try {
       const response = await this.api.get<any[]>('/products?linhas[]=269&linhas[]=270');
-      console.log('📦 Produtos disponíveis (raw):', response);
       
       // Mapear dados da API para o formato interno
       const products: Product[] = response.map(item => ({
@@ -170,7 +161,6 @@ class ProductionService {
         sku: item.internal_code
       }));
       
-      console.log('📦 Produtos mapeados:', products);
       return products;
     } catch (error) {
       console.error('❌ Erro ao buscar produtos:', error);
@@ -189,7 +179,6 @@ class ProductionService {
       };
 
       const event = await this.api.post<ShiftEvent>(`/shifts/${timesheetId}/events`, eventData);
-      console.log('⏸️ Produção pausada:', event);
       return event;
     } catch (error) {
       console.error('❌ Erro ao pausar produção:', error);
@@ -208,7 +197,6 @@ class ProductionService {
       };
 
       const event = await this.api.post<ShiftEvent>(`/shifts/${timesheetId}/events`, eventData);
-      console.log('▶️ Produção retomada:', event);
       return event;
     } catch (error) {
       console.error('❌ Erro ao retomar produção:', error);
@@ -222,7 +210,6 @@ class ProductionService {
   async getShiftEvents(timesheetId: string): Promise<ShiftEvent[]> {
     try {
       const response = await this.api.get<ShiftEvent[]>(`/shifts/${timesheetId}/events`);
-      console.log('📜 Eventos do turno:', response);
       return response;
     } catch (error) {
       console.error('❌ Erro ao buscar eventos do turno:', error);

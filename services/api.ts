@@ -15,14 +15,12 @@ const getOriginHeaders = (): Partial<{ Origin: string; Referer: string }> => {
   if (isDevelopmentWithProxy()) {
     // Em desenvolvimento com proxy, não precisamos dos headers de origem
     // pois o proxy do Vite já os adiciona automaticamente
-    console.log('🔧 Headers de origem: omitidos (desenvolvimento com proxy)');
     return {};
   } else {
     // Em produção/staging/Vercel, simular a origem esperada pelo servidor da Option7
     const hostname = window.location.hostname;
     
     if (hostname.includes('vercel.app')) {
-      console.log('🔧 Headers de origem: simulando m.option7.ai para Vercel');
       return {
         'Origin': 'https://m.option7.ai',
         'Referer': 'https://m.option7.ai/'
@@ -30,7 +28,6 @@ const getOriginHeaders = (): Partial<{ Origin: string; Referer: string }> => {
     }
     
     // Para outros ambientes, deixar o navegador gerenciar
-    console.log('🔧 Headers de origem: omitidos (outros ambientes) - deixando navegador gerenciar');
     return {};
   }
 };
@@ -42,7 +39,6 @@ const getFallbackOriginHeaders = (): Partial<{ Origin: string; Referer: string }
   
   // Se estamos no Vercel e o servidor espera m.option7.ai
   if (hostname.includes('vercel.app')) {
-    console.log('🔧 Headers de origem FALLBACK: simulando m.option7.ai para Vercel');
     return {
       'Origin': 'https://m.option7.ai',
       'Referer': 'https://m.option7.ai/'
@@ -55,16 +51,13 @@ const getFallbackOriginHeaders = (): Partial<{ Origin: string; Referer: string }
 // Função para log detalhado das requisições
 const logRequest = (method: string, url: string, headers: HeadersInit, body?: any) => {
   console.group(`🚀 ${method} ${url}`);
-  console.log('📋 Headers:', headers);
   if (body) {
-    console.log('📦 Body:', body);
   }
   console.groupEnd();
 };
 
 const logResponse = (method: string, url: string, status: number, data: any) => {
   console.group(`✅ ${method} ${url} (${status})`);
-  console.log('📄 Response:', data);
   console.groupEnd();
 };
 
@@ -92,9 +85,7 @@ class ApiClient {
     this.baseUrl = baseUrl;
     this.token = localStorage.getItem('mobile_api_token');
     
-
-    
-    console.log('🔧 ApiClient inicializado (HEADERS PADRONIZADOS):', {
+    console.log('🔧 ApiClient: Inicializado com configurações:', {
       baseUrl: this.baseUrl,
       hasToken: !!this.token,
       tokenPreview: this.token ? `${this.token.substring(0, 20)}...` : 'null'
@@ -115,7 +106,7 @@ class ApiClient {
 
     if (this.token) {
       headers['Authorization'] = `Bearer ${this.token}`;
-      console.log('🔐 Bearer token incluído:', {
+      console.log('🔧 ApiClient: Token encontrado:', {
         tokenPreview: `${this.token.substring(0, 20)}...`
       });
     } else {
@@ -145,10 +136,6 @@ class ApiClient {
     formData.append('username', username);
     formData.append('password', password);
     
-    console.log('🚀 === LOGIN COM HEADERS PADRONIZADOS ===');
-    console.log('URL:', url);
-    console.log('Form Data:', formData.toString());
-    console.log('=====================================');
     
     logRequest('POST', url, this.getLoginHeaders(), formData.toString());
     
@@ -161,8 +148,6 @@ class ApiClient {
         credentials: 'omit'
       });
 
-      console.log('📊 Login Response Status:', response.status);
-      console.log('📋 Login Response Headers:', Object.fromEntries(response.headers.entries()));
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -183,9 +168,7 @@ class ApiClient {
       localStorage.setItem('mobile_api_token', data.token);
       localStorage.setItem('user_name', cleanPhpSerializedString(data.nome)); // Limpar nome serializado
       
-      
-      
-      console.log('🔐 Token salvo (HEADERS PADRONIZADOS):', {
+      console.log('🔧 ApiClient: Login realizado com sucesso:', {
         tokenPreview: `${data.token.substring(0, 20)}...`,
         nome: cleanPhpSerializedString(data.nome)
       });
@@ -207,7 +190,7 @@ class ApiClient {
     const storedToken = localStorage.getItem('mobile_api_token');
     if (storedToken && storedToken !== this.token) {
       this.token = storedToken;
-      console.log('🔄 Token atualizado do localStorage:', {
+      console.log('🔧 ApiClient: Token atualizado do localStorage:', {
         tokenPreview: `${storedToken.substring(0, 20)}...`
       });
     }
@@ -220,7 +203,7 @@ class ApiClient {
 
   // Debug: mostrar informações do token atual
   debugTokenInfo(): void {
-    console.log('🔍 Debug Token Info (HEADERS PADRONIZADOS):', {
+    console.log('🔧 ApiClient: Informações do token:', {
       hasToken: !!this.token,
       tokenLength: this.token?.length || 0,
       tokenPreview: this.token ? `${this.token.substring(0, 20)}...` : 'null',
@@ -231,7 +214,6 @@ class ApiClient {
 
   // Logout
   logout(): void {
-    console.log('🚪 Logout - limpando dados');
     this.token = null;
     localStorage.removeItem('mobile_api_token');
     localStorage.removeItem('user_name');
@@ -242,10 +224,6 @@ class ApiClient {
     const url = `${this.baseUrl}${endpoint}`;
     const headers = this.getHeaders();
     
-    console.log('🚀 === GET COM HEADERS PADRONIZADOS ===');
-    console.log('URL:', url);
-    console.log('Headers:', headers);
-    console.log('====================================');
     
     logRequest('GET', url, headers);
     
@@ -257,8 +235,6 @@ class ApiClient {
         credentials: 'omit'
       });
 
-      console.log('📊 GET Response Status:', response.status);
-      console.log('📋 GET Response Headers:', Object.fromEntries(response.headers.entries()));
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -284,11 +260,6 @@ class ApiClient {
     const url = `${this.baseUrl}${endpoint}`;
     const headers = this.getHeaders();
     
-    console.log('🚀 === POST COM HEADERS PADRONIZADOS ===');
-    console.log('URL:', url);
-    console.log('Headers:', headers);
-    console.log('Body:', data);
-    console.log('=====================================');
     
     logRequest('POST', url, headers, data);
     
@@ -301,8 +272,6 @@ class ApiClient {
         credentials: 'omit'
       });
 
-      console.log('📊 POST Response Status:', response.status);
-      console.log('📋 POST Response Headers:', Object.fromEntries(response.headers.entries()));
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -328,11 +297,6 @@ class ApiClient {
     const url = `${this.baseUrl}${endpoint}`;
     const headers = this.getHeaders();
     
-    console.log('🚀 === PUT COM HEADERS PADRONIZADOS ===');
-    console.log('URL:', url);
-    console.log('Headers:', headers);
-    console.log('Body:', data);
-    console.log('====================================');
     
     logRequest('PUT', url, headers, data);
     
@@ -345,8 +309,6 @@ class ApiClient {
         credentials: 'omit'
       });
 
-      console.log('📊 PUT Response Status:', response.status);
-      console.log('📋 PUT Response Headers:', Object.fromEntries(response.headers.entries()));
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -372,11 +334,6 @@ class ApiClient {
     const url = `${this.baseUrl}${endpoint}`;
     const headers = this.getHeaders();
     
-    console.log('🚀 === PATCH COM HEADERS PADRONIZADOS ===');
-    console.log('URL:', url);
-    console.log('Headers:', headers);
-    console.log('Body:', data);
-    console.log('=====================================');
     
     logRequest('PATCH', url, headers, data);
     
@@ -389,8 +346,6 @@ class ApiClient {
         credentials: 'omit'
       });
 
-      console.log('📊 PATCH Response Status:', response.status);
-      console.log('📋 PATCH Response Headers:', Object.fromEntries(response.headers.entries()));
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -416,10 +371,6 @@ class ApiClient {
     const url = `${this.baseUrl}${endpoint}`;
     const headers = this.getHeaders();
     
-    console.log('🚀 === DELETE COM HEADERS PADRONIZADOS ===');
-    console.log('URL:', url);
-    console.log('Headers:', headers);
-    console.log('======================================');
     
     logRequest('DELETE', url, headers);
     
@@ -431,8 +382,6 @@ class ApiClient {
         credentials: 'omit'
       });
 
-      console.log('📊 DELETE Response Status:', response.status);
-      console.log('📋 DELETE Response Headers:', Object.fromEntries(response.headers.entries()));
 
       if (!response.ok) {
         const errorText = await response.text();

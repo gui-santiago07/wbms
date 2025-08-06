@@ -38,7 +38,6 @@ class TimesheetService {
   // ✅ CORRETO - Buscar timesheet ativo para a linha atual
   async getActiveTimesheet(lineKey: string): Promise<TimesheetData | null> {
     try {
-      console.log('📊 Buscando timesheet ativo para linha:', lineKey);
       
       const response = await this.apiService.getTimesheets({
         unfinished: true
@@ -50,7 +49,6 @@ class TimesheetService {
       );
 
       if (activeTimesheet) {
-        console.log('✅ Timesheet ativo encontrado:', activeTimesheet.id);
         return {
           shift_number_key: activeTimesheet.id.toString(),
           shift_id: activeTimesheet.shift,
@@ -65,7 +63,6 @@ class TimesheetService {
         };
       }
 
-      console.log('⚠️ Nenhum timesheet ativo encontrado');
       return null;
     } catch (error) {
       console.error('❌ Erro ao buscar timesheet ativo:', error);
@@ -86,7 +83,6 @@ class TimesheetService {
     sector: string;
   }): Promise<TimesheetResponse> {
     try {
-      console.log('📊 Criando novo timesheet:', data);
       
       const result = await this.apiService.createTimesheet({
         date: new Date().toISOString().split('T')[0],
@@ -99,7 +95,6 @@ class TimesheetService {
         client_line_id: parseInt(data.client_line_key)
       });
       
-      console.log('✅ Timesheet criado:', result.id);
       
       return {
         shift_number_key: result.id.toString(),
@@ -115,7 +110,6 @@ class TimesheetService {
   // ✅ CORRETO - Buscar eventos de timeline
   async getTimelineEvents(shiftNumberKey: string): Promise<TimelineEvent[]> {
     try {
-      console.log('📊 Buscando eventos da timeline:', shiftNumberKey);
       
       const events = await this.apiService.getTimesheetEvents(parseInt(shiftNumberKey));
       
@@ -129,7 +123,6 @@ class TimesheetService {
         color: this.getStatusColor(event.type)
       }));
 
-      console.log('✅ Eventos da timeline carregados:', timelineEvents.length);
       return timelineEvents;
     } catch (error) {
       console.error('❌ Erro ao buscar eventos da timeline:', error);
@@ -140,11 +133,9 @@ class TimesheetService {
   // ✅ CORRETO - Buscar jobs do turno
   async getShiftJobs(shiftNumberKey: string): Promise<any[]> {
     try {
-      console.log('📋 Buscando jobs do turno:', shiftNumberKey);
       
       // A API Option7 não tem endpoint específico para jobs por shift
       // Vamos retornar um array vazio por enquanto
-      console.log('⚠️ Endpoint de jobs por shift não implementado na API');
       return [];
     } catch (error) {
       console.error('❌ Erro ao buscar jobs:', error);
@@ -163,7 +154,6 @@ class TimesheetService {
     reject_count: number;
   }): Promise<any> {
     try {
-      console.log('📊 Criando novo job:', data);
       
       const result = await this.apiService.createJob({
         shift_number_key: parseInt(data.shift_number_key),
@@ -175,7 +165,6 @@ class TimesheetService {
         good_count: data.good_count
       });
       
-      console.log('✅ Job criado:', result.id);
       
       return result;
     } catch (error) {
@@ -194,11 +183,9 @@ class TimesheetService {
     event_description_key?: string;
   }): Promise<any> {
     try {
-      console.log('📊 Criando evento de timeline:', data);
       
       // A API Option7 não tem endpoint específico para criar eventos de timeline
       // Vamos simular o sucesso por enquanto
-      console.log('⚠️ Endpoint de criação de eventos não implementado na API');
       
       return {
         timeline_key: Date.now(),

@@ -94,28 +94,23 @@ const StopReasonModal: React.FC = () => {
   // Carregar motivos de parada e histórico quando o modal for montado
   useEffect(() => {
     if (downtimeReasons.length === 0) {
-      console.log('🛑 Modal: Carregando motivos de parada...');
       fetchStopReasons();
     }
     
     // Carregar histórico de paradas
-    console.log('🛑 Modal: Carregando histórico de paradas...');
     fetchDowntimeHistory();
   }, [downtimeReasons.length, fetchStopReasons, fetchDowntimeHistory]);
 
   const handleReasonSelect = async (reason: string, reasonId?: string) => {
     if (isSubmitting) {
-      console.log('⚠️ Já está processando uma seleção de motivo...');
       return;
     }
     
-    console.log('🔄 Selecionando motivo da parada:', { reason, reasonId });
     setIsSubmitting(true);
     setSelectedReason(reason);
     
     try {
       await registerStopReason(reason, reasonId);
-      console.log('✅ Motivo registrado com sucesso, redirecionando para o dashboard...');
       
       // Feedback visual de sucesso
       const successMessage = document.createElement('div');

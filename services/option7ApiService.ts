@@ -186,9 +186,7 @@ class Option7ApiService extends ApiClient {
       plantIds.forEach(id => queryParams.push(`plantas[]=${id}`));
       const queryString = queryParams.join('&');
       
-      console.log('🔍 Option7ApiService: Buscando setores com parâmetros:', queryString);
       const result = await this.get<SectorResponse[]>(`/sectors?${queryString}`);
-      console.log('✅ Option7ApiService: Setores obtidos:', result);
       return result;
     } catch (error) {
       console.error('❌ Erro ao buscar setores:', error);

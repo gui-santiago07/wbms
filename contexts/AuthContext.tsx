@@ -7,17 +7,14 @@ interface User {
   name: string;
   username: string;
   role: string;
-  setupCompleted?: boolean;
 }
 
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  setupCompleted: boolean;
   login: (username: string, password: string) => Promise<boolean>;
   logout: () => void;
-  markSetupComplete: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -39,7 +36,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // Verificar se o usuário salvo tem a estrutura antiga (com email)
         // e converter para a nova estrutura (com username)
         if (parsedUser.email && !parsedUser.username) {
-          console.log('Convertendo usuário antigo para nova estrutura');
           const updatedUser = {
             ...parsedUser,
             username: cleanPhpSerializedString(parsedUser.email), // Limpar string serializada
@@ -73,13 +69,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         id: '1', // ID será fornecido pela API real
         name: cleanPhpSerializedString(response.nome), // Limpar nome serializado
         username: cleanPhpSerializedString(username), // Limpar username serializado
-        role: 'Operador', // Role será fornecido pela API real
-        setupCompleted: true // Setup sempre completo (tela removida)
+        role: 'Operador' // Role será fornecido pela API real
       };
       
       setUser(userToStore);
       localStorage.setItem('oee_user', JSON.stringify(userToStore));
-      localStorage.setItem('oee_setup_completed', 'true'); // Setup sempre completo
       setIsLoading(false);
       return true;
     } catch (error) {
@@ -92,26 +86,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const logout = () => {
     setUser(null);
     localStorage.removeItem('oee_user');
-    localStorage.removeItem('oee_setup_completed');
-  };
-
-  const markSetupComplete = () => {
-    if (user) {
-      const updatedUser = { ...user, setupCompleted: true };
-      setUser(updatedUser);
-      localStorage.setItem('oee_user', JSON.stringify(updatedUser));
-      localStorage.setItem('oee_setup_completed', 'true');
-    }
   };
 
   const value: AuthContextType = {
     user,
     isAuthenticated: !!user,
     isLoading,
-    setupCompleted: user?.setupCompleted || localStorage.getItem('oee_setup_completed') === 'true',
     login,
-    logout,
-    markSetupComplete
+    logout
   };
 
   return (

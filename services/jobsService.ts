@@ -14,7 +14,6 @@ class JobsService {
   async getShifts(): Promise<ApiShift[]> {
     try {
       const response = await this.apiClient.get<ApiShift[]>('/workshifts');
-      console.log('✅ Turnos carregados da API:', response);
       return response;
     } catch (error) {
       console.error('❌ Erro ao buscar turnos:', error);
@@ -28,7 +27,6 @@ class JobsService {
   async getJobsByShift(shiftNumberKey: string): Promise<Job[]> {
     try {
       const response = await this.apiClient.get<Job[]>(`/jobs?shift_number_key=${shiftNumberKey}`);
-      console.log('✅ Jobs do turno carregados:', response);
       return response;
     } catch (error) {
       console.error('❌ Erro ao buscar jobs do turno:', error);
@@ -42,7 +40,6 @@ class JobsService {
   async getProducts(): Promise<ApiProduct[]> {
     try {
       const response = await this.apiClient.get<ApiProduct[]>('/products');
-      console.log('✅ Produtos carregados da API:', response);
       return response;
     } catch (error) {
       console.error('❌ Erro ao buscar produtos:', error);
@@ -56,7 +53,6 @@ class JobsService {
   async getFilteredProducts(filter: ProductFilter): Promise<ApiProduct[]> {
     try {
       const response = await this.apiClient.post<ApiProduct[]>('/products', filter);
-      console.log('✅ Produtos filtrados carregados:', response);
       return response;
     } catch (error) {
       console.error('❌ Erro ao buscar produtos filtrados:', error);
@@ -92,7 +88,6 @@ class JobsService {
   }): Promise<Job> {
     try {
       const response = await this.apiClient.post<Job>('/jobs', jobData);
-      console.log('✅ Job criado:', response);
       return response;
     } catch (error) {
       console.error('❌ Erro ao criar job:', error);
@@ -106,7 +101,6 @@ class JobsService {
   async updateJob(jobId: string, jobData: Partial<Job>): Promise<Job> {
     try {
       const response = await this.apiClient.patch<Job>(`/jobs/${jobId}`, jobData);
-      console.log('✅ Job atualizado:', response);
       return response;
     } catch (error) {
       console.error('❌ Erro ao atualizar job:', error);
@@ -123,7 +117,6 @@ class JobsService {
         end_time: endTime,
         is_finished: true
       });
-      console.log('✅ Job finalizado:', response);
       return response;
     } catch (error) {
       console.error('❌ Erro ao finalizar job:', error);
@@ -137,7 +130,6 @@ class JobsService {
   async getActiveJobs(): Promise<Job[]> {
     try {
       const response = await this.apiClient.get<Job[]>('/jobs?is_finished=false');
-      console.log('✅ Jobs ativos carregados:', response);
       return response;
     } catch (error) {
       console.error('❌ Erro ao buscar jobs ativos:', error);
@@ -151,7 +143,6 @@ class JobsService {
   async getJobsByPeriod(startDate: string, endDate: string): Promise<Job[]> {
     try {
       const response = await this.apiClient.get<Job[]>(`/jobs?start_date=${startDate}&end_date=${endDate}`);
-      console.log('✅ Jobs por período carregados:', response);
       return response;
     } catch (error) {
       console.error('❌ Erro ao buscar jobs por período:', error);
@@ -183,7 +174,6 @@ class JobsService {
         totalRejects: number;
         averageOEE: number;
       }>(endpoint);
-      console.log('✅ Estatísticas de jobs carregadas:', response);
       return response;
     } catch (error) {
       console.error('❌ Erro ao buscar estatísticas de jobs:', error);

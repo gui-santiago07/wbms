@@ -18,7 +18,6 @@ const Header: React.FC = () => {
   // Mostrar modal de seleção de linha se necessário
   useEffect(() => {
     if (shouldShowModal) {
-      console.log('🔄 Dispositivo não configurado, mostrando modal de seleção de linha');
     }
   }, [shouldShowModal]);
 

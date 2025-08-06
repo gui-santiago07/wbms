@@ -190,7 +190,6 @@ export const useDeviceSettingsStore = create<DeviceSettingsStore>()(
           }
           
           // Simular toast de sucesso
-          // console.log('Dispositivo salvo com sucesso!');
           
         } catch (error) {
           console.error('Erro ao salvar dispositivo:', error);

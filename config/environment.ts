@@ -13,12 +13,12 @@ const environments: Record<string, EnvironmentConfig> = {
     defaultShiftId: 'turno_1'
   },
   staging: {
-    apiBaseUrl: 'https://staging.option7.ai/api',
+    apiBaseUrl: 'http://localhost:8090/api',
     pollingInterval: 5000,
     defaultShiftId: 'turno_1' 
   },
   production: {
-    apiBaseUrl: 'https://staging.option7.ai/api',
+    apiBaseUrl: 'http://localhost:8090/api',
     pollingInterval: 10000,
     defaultShiftId: 'turno_1'
   },
@@ -36,7 +36,6 @@ const getCurrentEnvironment = (): string => {
   const urlParams = new URLSearchParams(window.location.search);
   const envParam = urlParams.get('env');
   if (envParam && environments[envParam]) {
-    console.log('🌍 Ambiente definido por query parameter:', envParam);
     return envParam;
   }
 
@@ -66,7 +65,7 @@ export const currentEnvironment = getCurrentEnvironment();
 
 // Log da configuração atual (apenas em desenvolvimento, staging e vercel)
 if (isDevelopment || isStaging || isVercel) {
-  console.log('🔧 Configuração do ambiente (SEM PROXY):', {
+  console.log('🔧 Configuração de Ambiente:', {
     environment: getCurrentEnvironment(),
     apiBaseUrl: config.apiBaseUrl,
     pollingInterval: config.pollingInterval,

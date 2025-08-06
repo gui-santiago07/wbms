@@ -1,7 +1,6 @@
 
 import React, { useEffect } from 'react';
 import { useProductionStore } from '../store/useProductionStore';
-import { useDeviceSettingsStore } from '../store/useDeviceSettingsStore';
 import { ViewState } from '../types';
 import Header from '../components/features/dashboard/Header';
 import KpiCard from '../components/features/dashboard/KpiCard';
@@ -12,7 +11,6 @@ import ProductionDetails from '../components/features/dashboard/ProductionDetail
 import ProductionChart from '../components/features/dashboard/ProductionChart';
 import MachineControls from '../components/features/dashboard/MachineControls';
 import StopReasonModal from '../components/features/modals/StopReasonModal';
-import SetupModal from '../components/features/modals/SetupModal';
 import ShiftModal from '../components/features/modals/ShiftModal';
 import { useLiveDataPolling } from '../hooks/useLiveDataPolling';
 import { useMachineControlsVisibility } from '../hooks/useMachineControlsVisibility';
@@ -73,20 +71,18 @@ const DashboardView: React.FC = () => {
 
 const DashboardPage: React.FC = () => {
   const { view, setView, initializeDashboard, isLoading, error, currentShift } = useProductionStore();
-  const { deviceSettings } = useDeviceSettingsStore();
   const { currentShift: detectedShift, isLoading: shiftLoading } = useShiftDetection();
   
   useLiveDataPolling(config.pollingInterval);
 
   // Garantir view válida na inicialização
   useEffect(() => {
-    if (!view || ![ViewState.DASHBOARD, ViewState.OEE, ViewState.STOP_REASON, ViewState.SETUP].includes(view)) {
-      console.log('🔄 View inválida na inicialização, redirecionando para DASHBOARD');
+    if (!view || ![ViewState.DASHBOARD, ViewState.OEE, ViewState.STOP_REASON].includes(view)) {
       setView(ViewState.DASHBOARD);
     }
   }, []);
 
-  // Inicializar dados do dashboard na primeira carga
+  // Inicializar dados do dashboard
   useEffect(() => {
     initializeDashboard();
   }, [initializeDashboard]);
@@ -96,32 +92,9 @@ const DashboardPage: React.FC = () => {
 
   // Debug: verificar renderização do MachineControls
   useEffect(() => {
-    // console.log('🎯 DashboardPage: Renderizando MachineControls');
-    // console.log('🎯 DashboardPage: View atual:', view);
   }, [view]);
 
-  // Verificar se dispositivo está configurado
-  if (!deviceSettings.isConfigured) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-background">
-        <Card className="text-center p-8 max-w-md">
-          <div className="text-6xl mb-4">⚙️</div>
-          <h2 className="text-2xl font-bold text-white mb-2">
-            Dispositivo Não Configurado
-          </h2>
-          <p className="text-gray-300 mb-4">
-            É necessário configurar o dispositivo antes de usar o sistema.
-          </p>
-          <button
-            onClick={() => window.location.href = '/login'}
-            className="bg-primary text-white px-6 py-2 rounded-lg hover:bg-primary/80"
-          >
-            Ir para Login
-          </button>
-        </Card>
-      </div>
-    );
-  }
+
 
   // Mostrar mensagem se não há turno ativo
   if (!shiftLoading && !detectedShift) {
@@ -152,8 +125,6 @@ const DashboardPage: React.FC = () => {
         return <DashboardView />;
       case ViewState.STOP_REASON:
         return <StopReasonModal />;
-      case ViewState.SETUP:
-        return <SetupModal />;
       case ViewState.SHIFT_MODAL:
         return <ShiftModal onClose={() => setView(ViewState.DASHBOARD)} />;
       default:

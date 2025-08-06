@@ -5,30 +5,25 @@ import ProductionDetails from './ProductionDetails';
 import MachineControls from './MachineControls';
 import Sidebar from './Sidebar';
 import StopReasonModal from '../modals/StopReasonModal';
-import SetupModal from '../modals/SetupModal';
 
 import ShiftModal from '../modals/ShiftModal';
 import ProductSelectionModal from '../modals/ProductSelectionModal';
 import LineSelectionModal from '../modals/LineSelectionModal';
-import InitialSetupModal from '../modals/InitialSetupModal';
+import SetupModal from '../modals/SetupModal';
 import LoadingSpinner from '../../ui/LoadingSpinner';
 import ErrorMessage from '../../ui/ErrorMessage';
 import TimeDistributionChart from './TimeDistributionChart';
 import StopReasonsList from './StopReasonsList';
 import ProductionTimeline from './ProductionTimeline';
-import ProductionDetailsCard from './ProductionDetailsCard';
+import NoActiveProductionMessage from './NoActiveProductionMessage';
 
 import { useProductionStore } from '../../../store/useProductionStore';
-import { useDeviceSettingsStore } from '../../../store/useDeviceSettingsStore';
 import { useLineSelection } from '../../../hooks/useLineSelection';
-import { useInitialSetup } from '../../../hooks/useInitialSetup';
 import { useSilentShiftDetection } from '../../../hooks/useSilentShiftDetection';
+import { useProductionStatusCheck } from '../../../hooks/useProductionStatusCheck';
+import { useProductionDataPolling } from '../../../hooks/useProductionDataPolling';
 import { ViewState } from '../../../types';
-import { useLiveDataPolling } from '../../../hooks/useLiveDataPolling';
 import { useMachineControlsVisibility } from '../../../hooks/useMachineControlsVisibility';
-import { useShiftDetection } from '../../../hooks/useShiftDetection';
-import { useProductionDetails } from '../../../hooks/useProductionDetails';
-import { config } from '../../../config/environment';
 
 // Tipos para os filtros de tempo
 type TimePeriod = '1h' | '4h' | '8h' | '24h' | '7d';
@@ -39,14 +34,16 @@ const CircularGauge: React.FC<{
   label: string; 
   color: string; 
   size?: number 
-}> = ({ value, label, color, size = 120 }) => {
-  const radius = size / 2 - 10;
+}> = ({ value, label, color, size = 100 }) => {
+  const radius = size / 2 - 8;
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - (value / 100) * circumference;
 
   // Calcular tamanhos responsivos baseados no size do círculo
   const getTextSize = () => {
-    if (size <= 100) return { value: 'text-lg', label: 'text-xs' };
+    if (size <= 80) return { value: 'text-sm', label: 'text-xs' };
+    if (size <= 100) return { value: 'text-base', label: 'text-xs' };
+    if (size <= 120) return { value: 'text-lg', label: 'text-sm' };
     if (size <= 140) return { value: 'text-xl', label: 'text-sm' };
     if (size <= 160) return { value: 'text-2xl', label: 'text-sm' };
     if (size <= 180) return { value: 'text-3xl', label: 'text-base' };
@@ -65,7 +62,7 @@ const CircularGauge: React.FC<{
             cy={size / 2}
             r={radius}
             stroke="#374151"
-            strokeWidth="8"
+            strokeWidth="6"
             fill="transparent"
           />
           {/* Progress circle */}
@@ -74,7 +71,7 @@ const CircularGauge: React.FC<{
             cy={size / 2}
             r={radius}
             stroke={color}
-            strokeWidth="8"
+            strokeWidth="6"
             fill="transparent"
             strokeDasharray={circumference}
             strokeDashoffset={strokeDashoffset}
@@ -82,11 +79,11 @@ const CircularGauge: React.FC<{
             style={{ transition: 'stroke-dashoffset 0.5s ease-out' }}
           />
         </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center px-3">
+        <div className="absolute inset-0 flex flex-col items-center justify-center px-2">
           <span className={`${valueTextSize} font-bold text-white leading-none`}>{value.toFixed(1)}%</span>
         </div>
       </div>
-      <span className={`${labelTextSize} text-muted mt-2 text-center`}>{label}</span>
+      <span className={`${labelTextSize} text-muted mt-1 text-center`}>{label}</span>
     </div>
   );
 };
@@ -180,19 +177,10 @@ const OeeTrendChart: React.FC = () => {
 };
 
 const OeeView: React.FC = () => {
-  const { liveMetrics, currentJob, currentShift, setShowProductSelectionModal } = useProductionStore();
-  const { productionDetails, isLoading: productionDetailsLoading } = useProductionDetails();
-  const goodPartsPercent = liveMetrics.total > 0 ? (liveMetrics.good / liveMetrics.total) * 100 : 100; // Sempre 100% (sem rejeitos)
+  const { currentShift, productionData, setupData, setShowSetupModal } = useProductionStore();
 
-  // Calcular progresso da ordem de produção
-  const productionProgress = liveMetrics.possibleProduction > 0 
-    ? (liveMetrics.productionOrderProgress / liveMetrics.possibleProduction) * 100 
-    : 90.0;
-
-  // Calcular tempo decorrido no turno
-  const timeProgress = liveMetrics.totalShiftTime > 0 
-    ? (liveMetrics.timeInShift / liveMetrics.totalShiftTime) * 100 
-    : 0;
+  // Verificar se há produção ativa
+  const hasActiveProduction = setupData && productionData.actual > 0;
 
   return (
     <div className="space-y-6">
@@ -215,50 +203,51 @@ const OeeView: React.FC = () => {
                 <div className="text-sm text-muted">
                   {currentShift?.name || 'Turno Ativo'}
                 </div>
-                <button
-                  onClick={() => setShowProductSelectionModal(true)}
-                  className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-                >
-                  Selecionar Produto
-                </button>
               </div>
             </div>
             
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4 mb-4 md:mb-6">
-              <div className="bg-surface p-4 rounded-lg">
-                <div className="text-sm text-muted mb-1">Target</div>
-                <div className="text-3xl font-bold text-white">{liveMetrics.possibleProduction}</div>
-              </div>
-              <div className="bg-surface p-4 rounded-lg">
-                <div className="text-sm text-muted mb-1">Actual</div>
-                <div className="text-3xl font-bold text-white">{liveMetrics.productionOrderProgress}</div>
-              </div>
-              <div className="bg-surface p-4 rounded-lg">
-                <div className="text-sm text-muted mb-1">Completion</div>
-                <div className="text-3xl font-bold text-white">{productionProgress.toFixed(1)}%</div>
-              </div>
-            </div>
+            {/* Conteúdo condicional baseado no status de produção */}
+            {hasActiveProduction ? (
+              <>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4 mb-4 md:mb-6">
+                  <div className="bg-surface p-4 rounded-lg">
+                    <div className="text-sm text-muted mb-1">Target</div>
+                    <div className="text-3xl font-bold text-white">{productionData.target.toLocaleString()}</div>
+                  </div>
+                  <div className="bg-surface p-4 rounded-lg">
+                    <div className="text-sm text-muted mb-1">Actual</div>
+                    <div className="text-3xl font-bold text-white">{productionData.actual.toLocaleString()}</div>
+                  </div>
+                  <div className="bg-surface p-4 rounded-lg">
+                    <div className="text-sm text-muted mb-1">Completion</div>
+                    <div className="text-3xl font-bold text-white">{productionData.completion}%</div>
+                  </div>
+                </div>
 
-            <div className="mb-4">
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-sm text-muted">Progress</span>
-                <span className="text-sm text-muted">{liveMetrics.productionOrderProgress} / {liveMetrics.possibleProduction}</span>
-              </div>
-              <div className="w-full bg-gray-700 h-3 rounded-full overflow-hidden">
-                <div 
-                  className="bg-blue-500 h-full transition-all duration-500 ease-out"
-                  style={{ width: `${Math.min(productionProgress, 100)}%` }}
-                />
-              </div>
-            </div>
+                <div className="mb-4">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-sm text-muted">Progress</span>
+                    <span className="text-sm text-muted">{productionData.actual.toLocaleString()} / {productionData.target.toLocaleString()}</span>
+                  </div>
+                  <div className="w-full bg-gray-700 h-3 rounded-full overflow-hidden">
+                    <div 
+                      className="bg-blue-500 h-full transition-all duration-500 ease-out"
+                      style={{ width: `${Math.min(productionData.completion, 100)}%` }}
+                    />
+                  </div>
+                </div>
 
-            <div className="flex justify-between items-center">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                <span className="text-sm text-white">Good Parts</span>
-                <span className="text-sm font-bold text-white">{liveMetrics.good} ({goodPartsPercent.toFixed(1)}%)</span>
-              </div>
-            </div>
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                    <span className="text-sm text-white">Good Parts</span>
+                    <span className="text-sm font-bold text-white">{productionData.goodParts.toLocaleString()} ({productionData.goodPartsPercent}%)</span>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <NoActiveProductionMessage onStartSetup={() => setShowSetupModal(true)} />
+            )}
           </Card>
 
           {/* Timeline de Produção */}
@@ -270,34 +259,60 @@ const OeeView: React.FC = () => {
             </div>
             <ProductionTimeline />
           </Card>
-
-          {/* Métricas OEE */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
-            <Card className="p-5 text-center">
-              <CircularGauge value={liveMetrics.oee} label="OEE" color="#3b82f6" size={140} />
-            </Card>
-            <Card className="p-5 text-center">
-              <CircularGauge value={liveMetrics.availability} label="Availability" color="#22c55e" size={140} />
-            </Card>
-            <Card className="p-5 text-center">
-              <CircularGauge value={liveMetrics.performance} label="Performance" color="#f59e0b" size={140} />
-            </Card>
-            <Card className="p-5 text-center">
-              <CircularGauge value={liveMetrics.quality} label="Quality" color="#8b5cf6" size={140} />
-            </Card>
-          </div>
         </div>
 
         {/* Detalhes da Produção - 1 coluna */}
         <div className="space-y-6">
-          <ProductionDetailsCard
-            productionDetails={productionDetails}
-            isLoading={productionDetailsLoading}
-            currentShiftName={currentShift?.name}
-          />
+          <Card className="p-4 md:p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-base md:text-lg font-semibold text-white">Production Details</h3>
+              <div className="text-sm text-muted">
+                {currentShift?.name || 'No Active Shift'}
+              </div>
+            </div>
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-muted">Product</span>
+                <span className="text-sm text-white">{setupData?.product || '-'}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-muted">Order</span>
+                <span className="text-sm text-white">{setupData?.productKey ? `OP-${setupData.productKey}` : '-'}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-muted">Status</span>
+                <span className="text-sm text-white">{productionData.actual > 0 ? 'Ativo' : 'Parado'}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-muted">Line</span>
+                <span className="text-sm text-white">{setupData?.line || '-'}</span>
+              </div>
+            </div>
+          </Card>
 
           <Card className="p-4 md:p-6">
             <OeeTrendChart />
+          </Card>
+
+          {/* Nova seção de métricas OEE */}
+          <Card className="p-4 md:p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-base md:text-lg font-semibold text-white">OEE Metrics</h3>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="text-center">
+                <CircularGauge value={0} label="OEE" color="#3b82f6" size={90} />
+              </div>
+              <div className="text-center">
+                <CircularGauge value={0} label="Availability" color="#22c55e" size={90} />
+              </div>
+              <div className="text-center">
+                <CircularGauge value={0} label="Performance" color="#f59e0b" size={90} />
+              </div>
+              <div className="text-center">
+                <CircularGauge value={0} label="Quality" color="#8b5cf6" size={90} />
+              </div>
+            </div>
           </Card>
         </div>
       </div>
@@ -309,41 +324,56 @@ const OeeView: React.FC = () => {
 };
 
 const OeeScreen: React.FC = () => {
-  const { view, setView, initializeDashboard, isLoading, error, showProductSelectionModal } = useProductionStore();
-  const { deviceSettings } = useDeviceSettingsStore();
-  const { isModalOpen, closeModal, confirmLineSelection, shouldShowModal } = useLineSelection();
-  
-  // Hook para gerenciar configuração inicial
   const { 
-    showSetupModal, 
-    isChecking, 
-    needsSetup, 
-    handleSetupComplete, 
-    handleSetupClose 
-  } = useInitialSetup();
+    view, 
+    setView, 
+    initializeDashboard, 
+    isLoading, 
+    error, 
+    showProductSelectionModal,
+    showSetupModal,
+    setShowSetupModal,
+    handleSetupComplete,
+    checkProductionStatus,
+    setupData
+  } = useProductionStore();
+  const { isModalOpen, closeModal, confirmLineSelection, shouldShowModal } = useLineSelection();
   
   // Hook para detecção silenciosa de turno
   useSilentShiftDetection();
-  
-  useLiveDataPolling(3000);
+
+  // Hook para verificar status de produção
+  const productionStatus = useProductionStatusCheck();
+
+  // Hook para polling de dados de produção
+  useProductionDataPolling(
+    productionStatus.clientLineKey || setupData?.line || null,
+    !productionStatus.needsSetup && productionStatus.hasActiveProduction
+  );
 
   // Garantir view válida na inicialização
   useEffect(() => {
-    if (!view || ![ViewState.DASHBOARD, ViewState.OEE, ViewState.STOP_REASON, ViewState.SETUP].includes(view)) {
-      console.log('🔄 View inválida na inicialização, redirecionando para OEE');
+    if (!view || ![ViewState.DASHBOARD, ViewState.OEE, ViewState.STOP_REASON].includes(view)) {
       setView(ViewState.OEE);
     }
   }, []);
 
-  // Inicializar dados do dashboard quando dispositivo estiver configurado
+  // Inicializar dados do dashboard
   useEffect(() => {
-    if (deviceSettings.isConfigured && !needsSetup) {
-      console.log('✅ Dispositivo configurado, inicializando dashboard...');
-      initializeDashboard();
+    initializeDashboard();
+  }, [initializeDashboard]);
+
+  // Verificar status de produção após login
+  useEffect(() => {
+    if (!productionStatus.isLoading && !isLoading) {
+      if (productionStatus.needsSetup) {
+        setShowSetupModal(true);
+      } else if (productionStatus.hasActiveProduction && productionStatus.clientLineKey) {
+        // Configurar setupData com a linha encontrada
+        // e carregar dados de produção
+      }
     }
-  }, [initializeDashboard, deviceSettings.isConfigured, needsSetup]);
-
-
+  }, [productionStatus, isLoading, setShowSetupModal]);
 
   // Hook personalizado para visibilidade do MachineControls
   const shouldShowMachineControls = useMachineControlsVisibility();
@@ -357,8 +387,14 @@ const OeeScreen: React.FC = () => {
       case ViewState.STOP_REASON:
         return <StopReasonModal />;
       case ViewState.SETUP:
-        return <SetupModal />;
-
+        return (
+          <SetupModal
+            isOpen={true}
+            onClose={() => setView(ViewState.OEE)}
+            onSetupComplete={handleSetupComplete}
+            clientLineKey={setupData?.line}
+          />
+        );
       case ViewState.SHIFT_MODAL:
         return <ShiftModal onClose={() => setView(ViewState.OEE)} />;
       default:
@@ -372,18 +408,6 @@ const OeeScreen: React.FC = () => {
       <div className="bg-background min-h-screen">
         <Sidebar />
         <StopReasonModal />
-      </div>
-    );
-  }
-
-  // Mostrar loading durante verificação de configuração inicial
-  if (isChecking) {
-    return (
-      <div className="p-4 sm:p-6 lg:p-8 bg-background min-h-screen ml-16 flex items-center justify-center">
-        <div className="text-center">
-          <LoadingSpinner size="lg" />
-          <p className="text-muted mt-4">Verificando configuração...</p>
-        </div>
       </div>
     );
   }
@@ -419,16 +443,13 @@ const OeeScreen: React.FC = () => {
           onClose={closeModal}
           onConfirm={confirmLineSelection}
         />
-        
-        {/* Modal de Configuração Inicial */}
-        <InitialSetupModal
+
+        {/* Modal de Setup */}
+        <SetupModal
           isOpen={showSetupModal}
-          onClose={handleSetupClose}
-          onComplete={() => {
-            handleSetupComplete();
-            console.log('✅ Configuração inicial concluída, inicializando dashboard...');
-            initializeDashboard();
-          }}
+          onClose={() => setShowSetupModal(false)}
+          onSetupComplete={handleSetupComplete}
+          clientLineKey={setupData?.line}
         />
       </div>
       
