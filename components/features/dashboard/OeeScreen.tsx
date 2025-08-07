@@ -5,6 +5,7 @@ import ProductionDetails from './ProductionDetails';
 import MachineControls from './MachineControls';
 import Sidebar from './Sidebar';
 import StopReasonModal from '../modals/StopReasonModal';
+import PauseReasonModal from '../modals/PauseReasonModal';
 
 import ShiftModal from '../modals/ShiftModal';
 import ProductSelectionModal from '../modals/ProductSelectionModal';
@@ -22,6 +23,7 @@ import { useLineSelection } from '../../../hooks/useLineSelection';
 import { useSilentShiftDetection } from '../../../hooks/useSilentShiftDetection';
 import { useProductionStatusCheck } from '../../../hooks/useProductionStatusCheck';
 import { useProductionDataPolling } from '../../../hooks/useProductionDataPolling';
+import { useOeeData } from '../../../hooks/useOeeData';
 import { ViewState } from '../../../types';
 import { useMachineControlsVisibility } from '../../../hooks/useMachineControlsVisibility';
 
@@ -177,10 +179,24 @@ const OeeTrendChart: React.FC = () => {
 };
 
 const OeeView: React.FC = () => {
-  const { currentShift, productionData, setupData, setShowSetupModal } = useProductionStore();
+  const { 
+    currentShift, 
+    productionData, 
+    setupData, 
+    setShowSetupModal,
+    selectedProduct,
+    setShowProductSelectionModal 
+  } = useProductionStore();
+  
+  // Hook para dados de OEE calculados da timeline
+  const { oeeData, isLoading: oeeLoading } = useOeeData();
 
   // Verificar se há produção ativa
   const hasActiveProduction = setupData && productionData.actual > 0;
+
+  const handleProductChange = () => {
+    setShowProductSelectionModal(true);
+  };
 
   return (
     <div className="space-y-6">
@@ -199,10 +215,21 @@ const OeeView: React.FC = () => {
                 </svg>
                 Production
               </h2>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
                 <div className="text-sm text-muted">
                   {currentShift?.name || 'Turno Ativo'}
                 </div>
+                
+                {/* Botão de seleção de produto */}
+                <button
+                  onClick={handleProductChange}
+                  className="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white text-xs rounded-lg transition-colors flex items-center gap-1"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 2v20M2 12h20"/>
+                  </svg>
+                  {selectedProduct ? 'Trocar Produto' : 'Escolher Produto'}
+                </button>
               </div>
             </div>
             
@@ -301,16 +328,16 @@ const OeeView: React.FC = () => {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="text-center">
-                <CircularGauge value={0} label="OEE" color="#3b82f6" size={90} />
+                <CircularGauge value={oeeData.oee} label="OEE" color="#3b82f6" size={90} />
               </div>
               <div className="text-center">
-                <CircularGauge value={0} label="Availability" color="#22c55e" size={90} />
+                <CircularGauge value={oeeData.availability} label="Availability" color="#22c55e" size={90} />
               </div>
               <div className="text-center">
-                <CircularGauge value={0} label="Performance" color="#f59e0b" size={90} />
+                <CircularGauge value={oeeData.performance} label="Performance" color="#f59e0b" size={90} />
               </div>
               <div className="text-center">
-                <CircularGauge value={0} label="Quality" color="#8b5cf6" size={90} />
+                <CircularGauge value={oeeData.quality} label="Quality" color="#8b5cf6" size={90} />
               </div>
             </div>
           </Card>
@@ -331,11 +358,13 @@ const OeeScreen: React.FC = () => {
     isLoading, 
     error, 
     showProductSelectionModal,
+    setShowProductSelectionModal,
     showSetupModal,
     setShowSetupModal,
     handleSetupComplete,
     checkProductionStatus,
-    setupData
+    setupData,
+    loadInitialProductionData
   } = useProductionStore();
   const { isModalOpen, closeModal, confirmLineSelection, shouldShowModal } = useLineSelection();
   
@@ -351,9 +380,17 @@ const OeeScreen: React.FC = () => {
     !productionStatus.needsSetup && productionStatus.hasActiveProduction
   );
 
+  // Carregar dados iniciais quando a linha for selecionada
+  useEffect(() => {
+    if (setupData?.line && !isLoading) {
+      // Carregar dados iniciais imediatamente após seleção da linha
+      loadInitialProductionData(setupData.line);
+    }
+  }, [setupData?.line, isLoading, loadInitialProductionData]);
+
   // Garantir view válida na inicialização
   useEffect(() => {
-    if (!view || ![ViewState.DASHBOARD, ViewState.OEE, ViewState.STOP_REASON].includes(view)) {
+    if (!view || ![ViewState.DASHBOARD, ViewState.OEE, ViewState.STOP_REASON, ViewState.PAUSE_REASON].includes(view)) {
       setView(ViewState.OEE);
     }
   }, []);
@@ -363,17 +400,13 @@ const OeeScreen: React.FC = () => {
     initializeDashboard();
   }, [initializeDashboard]);
 
-  // Verificar status de produção após login
+  // Sempre mostrar modal de seleção de produto após login
   useEffect(() => {
-    if (!productionStatus.isLoading && !isLoading) {
-      if (productionStatus.needsSetup) {
-        setShowSetupModal(true);
-      } else if (productionStatus.hasActiveProduction && productionStatus.clientLineKey) {
-        // Configurar setupData com a linha encontrada
-        // e carregar dados de produção
-      }
+    if (!isLoading) {
+      // Sempre mostrar modal de seleção de produto após login
+      setShowProductSelectionModal(true);
     }
-  }, [productionStatus, isLoading, setShowSetupModal]);
+  }, [isLoading, setShowProductSelectionModal]);
 
   // Hook personalizado para visibilidade do MachineControls
   const shouldShowMachineControls = useMachineControlsVisibility();
@@ -386,6 +419,8 @@ const OeeScreen: React.FC = () => {
         return <StopReasonModal />;
       case ViewState.STOP_REASON:
         return <StopReasonModal />;
+      case ViewState.PAUSE_REASON:
+        return <PauseReasonModal />;
       case ViewState.SETUP:
         return (
           <SetupModal
@@ -402,12 +437,12 @@ const OeeScreen: React.FC = () => {
     }
   };
 
-  // Se estiver na tela de STOP_REASON, renderizar apenas o modal com sidebar, sem header
-  if (view === ViewState.STOP_REASON) {
+  // Se estiver na tela de STOP_REASON ou PAUSE_REASON, renderizar apenas o modal com sidebar, sem header
+  if (view === ViewState.STOP_REASON || view === ViewState.PAUSE_REASON) {
     return (
       <div className="bg-background min-h-screen">
         <Sidebar />
-        <StopReasonModal />
+        {view === ViewState.STOP_REASON ? <StopReasonModal /> : <PauseReasonModal />}
       </div>
     );
   }

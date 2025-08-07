@@ -48,6 +48,38 @@ interface AutoApontamentoLineResponse {
   data: AutoApontamentoDevice;
 }
 
+// Nova interface para a resposta da API de auto-apontamento em tempo real
+interface AutoApontamentoRealTimeResponse {
+  success: boolean;
+  timestamp: any[];
+  data: {
+    line: {
+      client_line_key: string;
+      line_name: string;
+      plant: string;
+      sector: string;
+    };
+    device: {
+      device_id: number;
+      asset_id: string;
+      status: string;
+      current_count: number;
+      last_communication: any[];
+      last_change: any[];
+    };
+    current_shift: {
+      shift_number_key: number;
+      shift_id: string;
+      start_time: string;
+      end_time: string;
+      total_good_count: number;
+      run_time: number;
+      oee: number;
+      has_product: boolean;
+    };
+  };
+}
+
 interface AutoApontamentoProduct {
   product_key: number;
   product: string;
@@ -79,6 +111,22 @@ interface StopProductionResponse {
   success: boolean;
   message: string;
   shift: {
+    shift_number_key: number;
+    total_count: number;
+    good_count: number;
+    oee: number;
+  };
+}
+
+interface StopProductionWithReasonRequest {
+  reason: string;
+  reasonId?: string;
+}
+
+interface StopProductionWithReasonResponse {
+  success: boolean;
+  message: string;
+  shift?: {
     shift_number_key: number;
     total_count: number;
     good_count: number;
@@ -125,6 +173,11 @@ interface ProductionData {
 
 class AutoApontamentoService {
   private api: ApiClient;
+  
+  // Configurações de produção
+  private readonly ESTIMATED_PRODUCTION_RATE = 100; // Peças por hora (configurável)
+  private readonly MIN_TARGET_MULTIPLIER = 1.2; // 20% a mais que o atual
+  private readonly MIN_TARGET_VALUE = 100; // Valor mínimo para target
 
   constructor() {
     this.api = new ApiClient();
@@ -152,6 +205,19 @@ class AutoApontamentoService {
       return response;
     } catch (error) {
       console.error('❌ Erro ao consultar linha específica:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Consultar dados em tempo real da linha
+   */
+  async getRealTimeData(clientLineKey: string): Promise<AutoApontamentoRealTimeResponse> {
+    try {
+      const response = await this.api.get<AutoApontamentoRealTimeResponse>(`/wbms/auto-apontamento/${clientLineKey}`);
+      return response;
+    } catch (error) {
+      console.error('❌ Erro ao consultar dados em tempo real:', error);
       throw error;
     }
   }
@@ -214,6 +280,24 @@ class AutoApontamentoService {
   }
 
   /**
+   * Parar produção com motivo específico
+   */
+  async stopProductionWithReason(clientLineKey: string, reason: string, reasonId?: string): Promise<StopProductionWithReasonResponse> {
+    try {
+      const requestData: StopProductionWithReasonRequest = {
+        reason,
+        reasonId
+      };
+
+      const response = await this.api.post<StopProductionWithReasonResponse>(`/wbms/auto-apontamento/${clientLineKey}/stop-production`, requestData);
+      return response;
+    } catch (error) {
+      console.error('❌ Erro ao parar produção com motivo:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Obter detalhes do produto
    */
   async getProductDetails(productId: string): Promise<ProductDetails> {
@@ -229,30 +313,49 @@ class AutoApontamentoService {
   /**
    * Obter dados de produção em tempo real
    */
-  async getProductionData(clientLineKey: string): Promise<ProductionData> {
+  async getProductionData(clientLineKey: string, productId?: string): Promise<ProductionData> {
     try {
-      // Buscar dados da linha
-      const lineData = await this.getLineData(clientLineKey);
+      // Buscar dados em tempo real da linha
+      const realTimeData = await this.getRealTimeData(clientLineKey);
       
-      if (!lineData.success || !lineData.data) {
+      if (!realTimeData.success || !realTimeData.data) {
         throw new Error('Dados da linha não disponíveis');
       }
 
-      const { device, current_shift } = lineData.data;
+      const { device, current_shift } = realTimeData.data;
       
       // Buscar detalhes do produto se houver produção ativa
       let productDetails: ProductDetails | undefined;
       let target = 0;
       
-      if (current_shift.has_product) {
+      if (current_shift.has_product && productId) {
         try {
-          // Tentar obter detalhes do produto (pode não estar disponível)
-          // productDetails = await this.getProductDetails(current_shift.shift_number_key.toString());
-          // target = productDetails.nominal_qty_max;
-          target = 1000; // Valor padrão por enquanto
+          // Buscar detalhes do produto usando o productId fornecido
+          productDetails = await this.getProductDetails(productId);
+          target = productDetails.nominal_qty_max;
+          
+          console.log('✅ Target obtido do produto:', {
+            productId,
+            productName: productDetails.product,
+            nominal_qty_max: productDetails.nominal_qty_max
+          });
         } catch (error) {
-          console.warn('⚠️ Não foi possível obter detalhes do produto, usando valores padrão');
-          target = 1000; // Valor padrão
+          console.warn('⚠️ Não foi possível obter detalhes do produto, calculando target baseado no tempo de execução');
+          const runTimeHours = current_shift.run_time / 3600;
+          const estimatedRate = this.ESTIMATED_PRODUCTION_RATE;
+          target = Math.round(runTimeHours * estimatedRate);
+          if (target <= 0) {
+            target = Math.max(current_shift.total_good_count * this.MIN_TARGET_MULTIPLIER, this.MIN_TARGET_VALUE);
+          }
+        }
+      } else if (current_shift.has_product && !productId) {
+        // Se há produto mas não temos o ID, usar cálculo baseado no tempo
+        console.warn('⚠️ Produto ativo mas ID não fornecido, calculando target baseado no tempo de execução');
+        const runTimeHours = current_shift.run_time / 3600;
+        const estimatedRate = this.ESTIMATED_PRODUCTION_RATE;
+        target = Math.round(runTimeHours * estimatedRate);
+        if (target <= 0) {
+          target = Math.max(current_shift.total_good_count * this.MIN_TARGET_MULTIPLIER, this.MIN_TARGET_VALUE);
         }
       }
 
@@ -280,6 +383,35 @@ class AutoApontamentoService {
         completion: 0,
         goodParts: 0,
         goodPartsPercent: 100
+      };
+    }
+  }
+
+  /**
+   * Obter status do dispositivo em tempo real
+   */
+  async getDeviceStatus(clientLineKey: string): Promise<{ status: string; assetId: string; deviceId: number }> {
+    try {
+      const realTimeData = await this.getRealTimeData(clientLineKey);
+      
+      if (!realTimeData.success || !realTimeData.data) {
+        throw new Error('Dados da linha não disponíveis');
+      }
+
+      const { device } = realTimeData.data;
+      
+      return {
+        status: device.status,
+        assetId: device.asset_id,
+        deviceId: device.device_id
+      };
+    } catch (error) {
+      console.error('❌ Erro ao obter status do dispositivo:', error);
+      // Retornar status padrão em caso de erro
+      return {
+        status: 'stopped',
+        assetId: '',
+        deviceId: 0
       };
     }
   }

@@ -1,34 +1,47 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useProductionStore } from '../store/useProductionStore';
 import { useDeviceSettingsStore } from '../store/useDeviceSettingsStore';
+import { useProductionStore } from '../store/useProductionStore';
 import { Shift } from '../types';
+import { pollingManager } from '../services/api';
 
-/**
- * Hook para detectar automaticamente o turno ativo baseado na hora atual
- * Atualiza o turno automaticamente quando a hora muda
- */
 export const useActiveShiftDetection = () => {
-  const { shifts, currentShift, setCurrentShift } = useProductionStore();
-  const { deviceSettings } = useDeviceSettingsStore();
+  const [currentShift, setCurrentShift] = useState<Shift | null>(null);
   const [isDetecting, setIsDetecting] = useState(false);
+  
+  const deviceSettings = useDeviceSettingsStore((state) => state.deviceSettings);
+  const shifts = useProductionStore((state) => state.shifts);
 
-  // Função para detectar turno ativo baseado na hora
+  // Função para detectar turno ativo baseado no horário atual
   const detectActiveShift = useCallback(() => {
-    if (shifts.length === 0) {
+    if (!shifts || shifts.length === 0) {
       return null;
     }
 
     const now = new Date();
-    const currentTime = now.getHours() * 60 + now.getMinutes(); // Converter para minutos
-    
+    const currentTime = now.getHours() * 60 + now.getMinutes();
 
-    // Encontrar turno ativo baseado no horário
     const activeShift = shifts.find(shift => {
-      const [startHour, startMin] = shift.startTime.split(':').map(Number);
-      const [endHour, endMin] = shift.endTime.split(':').map(Number);
-      
-      const shiftStartMinutes = startHour * 60 + startMin;
-      const shiftEndMinutes = endHour * 60 + endMin;
+      // Determinar horários baseado no nome do turno
+      let shiftStartMinutes: number;
+      let shiftEndMinutes: number;
+
+      if (shift.name.toLowerCase().includes('1') || shift.code?.includes('1')) {
+        // Turno 1: 08:00 - 16:00
+        shiftStartMinutes = 8 * 60; // 08:00
+        shiftEndMinutes = 16 * 60;  // 16:00
+      } else if (shift.name.toLowerCase().includes('2') || shift.code?.includes('2')) {
+        // Turno 2: 16:00 - 00:00
+        shiftStartMinutes = 16 * 60; // 16:00
+        shiftEndMinutes = 24 * 60;   // 00:00
+      } else if (shift.name.toLowerCase().includes('3') || shift.code?.includes('3')) {
+        // Turno 3: 00:00 - 08:00
+        shiftStartMinutes = 0;       // 00:00
+        shiftEndMinutes = 8 * 60;    // 08:00
+      } else {
+        // Turno padrão: 08:00 - 16:00
+        shiftStartMinutes = 8 * 60;
+        shiftEndMinutes = 16 * 60;
+      }
       
       // Lidar com turnos que passam da meia-noite
       if (shiftEndMinutes < shiftStartMinutes) {
@@ -93,6 +106,7 @@ export const useActiveShiftDetection = () => {
       
       // Se encontrou um turno ativo e é diferente do atual
       if (activeShift && (!currentShift || currentShift.id !== activeShift.id)) {
+        console.log('🔄 useActiveShiftDetection: Turno ativo mudou:', {
           from: currentShift?.name || 'Nenhum',
           to: activeShift.name
         });
@@ -118,7 +132,13 @@ export const useActiveShiftDetection = () => {
       updateActiveShift();
     }, 60000); // 1 minuto
 
-    return () => clearInterval(interval);
+    // Registrar intervalo no sistema centralizado
+    pollingManager.registerInterval(interval);
+
+    return () => {
+      clearInterval(interval);
+      pollingManager.unregisterInterval(interval);
+    };
   }, [updateActiveShift]);
 
   // Verificar turno quando a linha mudar

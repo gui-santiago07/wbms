@@ -7,7 +7,6 @@ import { DowntimeReasonCategory } from '../../../types';
 
 import ShiftModal from './ShiftModal';
 import { ViewState } from '../../../types';
-import StopReasonsList from '../dashboard/StopReasonsList';
 
 // Componente para o gauge circular OEE
 const CircularGauge: React.FC<{ 
@@ -79,7 +78,9 @@ const CircularGauge: React.FC<{
 };
 
 const StopReasonModal: React.FC = () => {
-  const { liveMetrics, currentJob, downtimeReasons, downtimeHistory, registerStopReason, currentShift, fetchStopReasons, fetchDowntimeHistory, isLoading, error, setView } = useProductionStore();
+  const { liveMetrics, currentJob, downtimeReasons, downtimeHistory, topStopReasons, registerStopReason, registerStopReasonWithAutoApontamento, addToTopStopReasons, currentShift, fetchStopReasons, fetchDowntimeHistory, isLoading, error, setView } = useProductionStore();
+  
+
   const [selectedReason, setSelectedReason] = useState<string>('');
   const [showReasonModal, setShowReasonModal] = useState(false);
   const [activeCategory, setActiveCategory] = useState<string>(downtimeReasons[0]?.category || '');
@@ -88,6 +89,8 @@ const StopReasonModal: React.FC = () => {
 
   const [showShiftModal, setShowShiftModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [localDowntimeHistory, setLocalDowntimeHistory] = useState(downtimeHistory);
+  const [localTopStopReasons, setLocalTopStopReasons] = useState(topStopReasons);
   const currentTime = useClock();
   const { user } = useAuth();
 
@@ -101,6 +104,16 @@ const StopReasonModal: React.FC = () => {
     fetchDowntimeHistory();
   }, [downtimeReasons.length, fetchStopReasons, fetchDowntimeHistory]);
 
+  // Sincronizar histórico local com o do store
+  useEffect(() => {
+    setLocalDowntimeHistory(downtimeHistory);
+  }, [downtimeHistory]);
+
+  // Sincronizar principais paradas locais com o do store
+  useEffect(() => {
+    setLocalTopStopReasons(topStopReasons);
+  }, [topStopReasons]);
+
   const handleReasonSelect = async (reason: string, reasonId?: string) => {
     if (isSubmitting) {
       return;
@@ -110,34 +123,122 @@ const StopReasonModal: React.FC = () => {
     setSelectedReason(reason);
     
     try {
-      await registerStopReason(reason, reasonId);
+      // Fechar o modal imediatamente para dar fluidez
+      setShowReasonModal(false);
+      setCustomReason('');
       
-      // Feedback visual de sucesso
+      // Adicionar o motivo ao histórico localmente (cache) para feedback imediato
+      const newEvent = {
+        id: Date.now().toString(),
+        operator: 'Sistema',
+        startDate: new Date().toISOString().split('T')[0],
+        startTime: new Date().toLocaleTimeString(),
+        endDate: new Date().toISOString().split('T')[0],
+        endTime: new Date().toLocaleTimeString(),
+        totalTime: '0',
+        reason: reasonId ? `${reason} (ID: ${reasonId})` : reason
+      };
+      
+      // Atualizar o histórico localmente
+      setLocalDowntimeHistory(prev => [newEvent, ...prev]);
+      
+      // Adicionar às principais paradas do dia
+      addToTopStopReasons(reason, reasonId);
+      
+      // Atualizar principais paradas localmente também
+      setLocalTopStopReasons(prev => {
+        const existingReason = prev.find(r => 
+          r.description === reason || r.id === reasonId
+        );
+
+        if (existingReason) {
+          // Se já existe, incrementar ocorrências e tempo
+          return prev.map(r => {
+            if (r.description === reason || r.id === reasonId) {
+              const currentOccurrences = r.occurrences + 1;
+              // Simular incremento de tempo (1 minuto por ocorrência)
+              const currentTimeInSeconds = r.totalTime.split(':').reduce((acc, time) => acc * 60 + parseInt(time), 0);
+              const newTimeInSeconds = currentTimeInSeconds + 60; // +1 minuto
+              const hours = Math.floor(newTimeInSeconds / 3600);
+              const minutes = Math.floor((newTimeInSeconds % 3600) / 60);
+              const seconds = newTimeInSeconds % 60;
+              const newTotalTime = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+              
+              return {
+                ...r,
+                occurrences: currentOccurrences,
+                totalTime: newTotalTime
+              };
+            }
+            return r;
+          });
+        } else {
+          // Se não existe, adicionar nova entrada
+          const newStopReason = {
+            id: reasonId || Date.now().toString(),
+            code: reasonId ? `ID-${reasonId}` : 'NOVO',
+            description: reason,
+            category: 'Parada',
+            totalTime: '00:01:00', // 1 minuto inicial
+            occurrences: 1
+          };
+          
+          return [newStopReason, ...prev];
+        }
+      });
+      
+      // Enviar para a API em background (não bloquear a UI)
+      registerStopReasonWithAutoApontamento(reason, reasonId).catch(error => {
+        console.error('❌ Erro ao registrar motivo na API:', error);
+        
+        // Feedback visual de erro discreto
+        const errorMessage = document.createElement('div');
+        errorMessage.className = 'fixed bottom-4 right-4 bg-red-600 text-white px-4 py-2 rounded-lg shadow-lg z-50 text-sm';
+        errorMessage.innerHTML = `
+          <span>⚠️</span>
+          <span>Erro na sincronização</span>
+        `;
+        document.body.appendChild(errorMessage);
+        
+        setTimeout(() => {
+          if (errorMessage.parentNode) {
+            errorMessage.parentNode.removeChild(errorMessage);
+          }
+        }, 3000);
+      });
+      
+      // Feedback visual de sucesso discreto
       const successMessage = document.createElement('div');
-      successMessage.className = 'fixed top-4 right-4 bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg z-50 flex items-center gap-2';
+      successMessage.className = 'fixed bottom-4 right-4 bg-green-600 text-white px-4 py-2 rounded-lg shadow-lg z-50 text-sm flex items-center gap-2';
       successMessage.innerHTML = `
         <span>✅</span>
-        <span>Motivo registrado: ${reason}</span>
+        <span>Motivo registrado</span>
       `;
       document.body.appendChild(successMessage);
       
-      // Limpar estados locais
-      setCustomReason('');
-      setShowReasonModal(false);
-      
-      // Aguardar um pequeno delay para garantir que os estados foram atualizados
       setTimeout(() => {
-        // Remover mensagem de sucesso
         if (successMessage.parentNode) {
           successMessage.parentNode.removeChild(successMessage);
         }
-        // Redirecionar para o dashboard
-        setView(ViewState.DASHBOARD);
-      }, 500);
-    } catch (error) {
-      console.error('❌ Erro ao registrar motivo:', error);
+      }, 2000);
       
-
+    } catch (error) {
+      console.error('❌ Erro ao processar motivo:', error);
+      
+      // Feedback visual de erro
+      const errorMessage = document.createElement('div');
+      errorMessage.className = 'fixed top-4 right-4 bg-red-600 text-white px-6 py-3 rounded-lg shadow-lg z-50 flex items-center gap-2';
+      errorMessage.innerHTML = `
+        <span>❌</span>
+        <span>Erro ao registrar motivo: ${error instanceof Error ? error.message : 'Erro desconhecido'}</span>
+      `;
+      document.body.appendChild(errorMessage);
+      
+      setTimeout(() => {
+        if (errorMessage.parentNode) {
+          errorMessage.parentNode.removeChild(errorMessage);
+        }
+      }, 3000);
     } finally {
       setIsSubmitting(false);
     }
@@ -190,6 +291,19 @@ const StopReasonModal: React.FC = () => {
               </svg>
             </div>
           </div>
+          
+          {/* Botão de Voltar */}
+          <button
+            onClick={() => setView(ViewState.DASHBOARD)}
+            className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2 font-semibold"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+              <polyline points="16,17 21,12 16,7"/>
+              <line x1="21" x2="9" y1="12" y2="12"/>
+            </svg>
+            Voltar
+          </button>
         </div>
       </header>
 
@@ -275,7 +389,50 @@ const StopReasonModal: React.FC = () => {
                  <h4 className="text-lg font-semibold text-white">Principais Paradas</h4>
                  <div className="text-sm text-gray-400">Hoje</div>
                </div>
-               <StopReasonsList />
+               <div className="space-y-3">
+                 {localTopStopReasons.length > 0 ? (
+                   localTopStopReasons.slice(0, 5).map((reason, index) => (
+                     <div 
+                       key={reason.id}
+                       className="flex items-center justify-between p-3 bg-gray-700 rounded-lg"
+                     >
+                       <div className="flex items-center gap-3">
+                         <div className="w-6 h-6 bg-red-500/20 text-red-400 rounded-full flex items-center justify-center text-xs font-bold">
+                           {index + 1}
+                         </div>
+                         <div>
+                           <div className="text-sm font-semibold text-white">
+                             {reason.code}: {reason.description}
+                           </div>
+                           <div className="text-xs text-gray-400">
+                             Categoria: {reason.category}
+                           </div>
+                         </div>
+                       </div>
+                       
+                       <div className="flex items-center gap-4">
+                         <div className="text-center">
+                           <div className="text-sm font-semibold text-white">
+                             {reason.occurrences}
+                           </div>
+                           <div className="text-xs text-gray-400">Qtd.</div>
+                         </div>
+                         
+                         <div className="text-center">
+                           <div className="text-sm font-semibold text-red-400">
+                             {reason.totalTime}
+                           </div>
+                           <div className="text-xs text-gray-400">Tempo Parado</div>
+                         </div>
+                       </div>
+                     </div>
+                   ))
+                 ) : (
+                   <div className="text-center py-4">
+                     <div className="text-gray-400 text-sm">Nenhuma parada registrada</div>
+                   </div>
+                 )}
+               </div>
              </Card>
 
              {/* Histórico Detalhado de Paradas */}
@@ -285,8 +442,8 @@ const StopReasonModal: React.FC = () => {
                  <div className="text-sm text-gray-400">Últimas ocorrências</div>
                </div>
                <div className="space-y-3 max-h-48 overflow-y-auto">
-                 {downtimeHistory.length > 0 ? (
-                   downtimeHistory.slice(0, 5).map((event, index) => (
+                 {localDowntimeHistory.length > 0 ? (
+                   localDowntimeHistory.slice(0, 5).map((event, index) => (
                      <div key={event.id} className="flex items-center justify-between p-3 bg-gray-700 rounded-lg">
                        <div className="flex items-center gap-3">
                          <div className="w-6 h-6 bg-red-500/20 text-red-400 rounded-full flex items-center justify-center text-xs font-bold">

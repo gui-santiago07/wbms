@@ -212,31 +212,8 @@ class ShiftService extends ApiClient {
         }
       }
       
-      // Retornar dados mockados em caso de erro para desenvolvimento
-      return {
-        shift: {
-          id: shiftId,
-          name: 'TURNO 1',
-          startTime: '08:00:00',
-          endTime: '18:00:00'
-        },
-        operator: {
-          name: 'João Silva',
-          role: 'Operator'
-        },
-        line: {
-          name: 'Linha de Produção A'
-        },
-        productionOrder: {
-          id: 'OP-2024-001',
-          totalQuantity: 1000,
-          shiftTarget: 1200
-        },
-        product: {
-          code: 'PROD-001',
-          name: 'Produto A'
-        }
-      };
+      // Retornar null em caso de erro para evitar dados mockados
+      return null;
     }
   }
 

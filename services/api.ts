@@ -4,6 +4,84 @@ import { cleanPhpSerializedString } from '../utils/stringUtils';
 // Configuração base da API
 const API_BASE_URL = config.apiBaseUrl;
 
+// Sistema global para gerenciar intervalos de polling
+class PollingManager {
+  private intervals: Set<NodeJS.Timeout> = new Set();
+  private isClearing = false;
+
+  // Registrar um intervalo de polling
+  registerInterval(interval: NodeJS.Timeout): void {
+    if (!this.isClearing) {
+      this.intervals.add(interval);
+    }
+  }
+
+  // Remover um intervalo específico
+  unregisterInterval(interval: NodeJS.Timeout): void {
+    this.intervals.delete(interval);
+  }
+
+  // Limpar todos os intervalos de polling
+  clearAllIntervals(): void {
+    console.log('🛑 PollingManager: Limpando todos os intervalos de polling...');
+    this.isClearing = true;
+    
+    this.intervals.forEach(interval => {
+      clearInterval(interval);
+    });
+    
+    this.intervals.clear();
+    this.isClearing = false;
+    console.log('✅ PollingManager: Todos os intervalos foram limpos');
+  }
+
+  // Obter quantidade de intervalos ativos
+  getActiveIntervalsCount(): number {
+    return this.intervals.size;
+  }
+}
+
+// Instância global do gerenciador de polling
+export const pollingManager = new PollingManager();
+
+// Sistema de callbacks para logout automático
+class AuthErrorHandler {
+  private logoutCallbacks: Set<() => void> = new Set();
+
+  // Registrar callback de logout
+  registerLogoutCallback(callback: () => void): void {
+    this.logoutCallbacks.add(callback);
+  }
+
+  // Remover callback de logout
+  unregisterLogoutCallback(callback: () => void): void {
+    this.logoutCallbacks.delete(callback);
+  }
+
+  // Executar logout automático
+  executeLogout(): void {
+    console.log('🚨 AuthErrorHandler: Executando logout automático devido a erro 401');
+    
+    // Limpar todos os intervalos de polling primeiro
+    pollingManager.clearAllIntervals();
+    
+    // Executar todos os callbacks de logout
+    this.logoutCallbacks.forEach(callback => {
+      try {
+        callback();
+      } catch (error) {
+        console.error('❌ Erro ao executar callback de logout:', error);
+      }
+    });
+    
+    // Limpar callbacks após execução
+    this.logoutCallbacks.clear();
+  }
+}
+
+// Instância global do handler de erros de autenticação
+export const authErrorHandler = new AuthErrorHandler();
+
 // Função para detectar se estamos em desenvolvimento (com proxy)
 const isDevelopmentWithProxy = (): boolean => {
   const hostname = window.location.hostname;
@@ -74,6 +152,25 @@ const logError = (method: string, url: string, error: any) => {
     });
   }
   console.groupEnd();
+};
+
+// Função para tratar erros de resposta HTTP
+const handleHttpError = (response: Response, method: string, url: string): never => {
+  // Verificar se é erro 401 (Unauthorized)
+  if (response.status === 401) {
+    console.error('🚨 Erro 401 detectado - Token expirado ou inválido');
+    
+    // Executar logout automático
+    authErrorHandler.executeLogout();
+    
+    // Redirecionar para login se estivermos em uma página que não seja login
+    if (!window.location.pathname.includes('/login')) {
+      window.location.href = '/login';
+    }
+  }
+  
+  // Para outros erros, lançar exceção normal
+  throw new Error(`Erro na requisição ${method}: ${response.status} ${response.statusText}`);
 };
 
 // Cliente base para requisições HTTP (CHAMADA DIRETA SEM PROXY)
@@ -243,6 +340,12 @@ class ApiClient {
           statusText: response.statusText,
           errorText
         });
+        
+        // Tratar erro 401 especificamente
+        if (response.status === 401) {
+          handleHttpError(response, 'GET', url);
+        }
+        
         throw new Error(`Erro na requisição GET: ${response.status} ${response.statusText} - ${errorText}`);
       }
 
@@ -280,6 +383,12 @@ class ApiClient {
           statusText: response.statusText,
           errorText
         });
+        
+        // Tratar erro 401 especificamente
+        if (response.status === 401) {
+          handleHttpError(response, 'POST', url);
+        }
+        
         throw new Error(`Erro na requisição POST: ${response.status} ${response.statusText} - ${errorText}`);
       }
 
@@ -317,6 +426,12 @@ class ApiClient {
           statusText: response.statusText,
           errorText
         });
+        
+        // Tratar erro 401 especificamente
+        if (response.status === 401) {
+          handleHttpError(response, 'PUT', url);
+        }
+        
         throw new Error(`Erro na requisição PUT: ${response.status} ${response.statusText} - ${errorText}`);
       }
 
@@ -354,6 +469,12 @@ class ApiClient {
           statusText: response.statusText,
           errorText
         });
+        
+        // Tratar erro 401 especificamente
+        if (response.status === 401) {
+          handleHttpError(response, 'PATCH', url);
+        }
+        
         throw new Error(`Erro na requisição PATCH: ${response.status} ${response.statusText} - ${errorText}`);
       }
 
@@ -390,6 +511,12 @@ class ApiClient {
           statusText: response.statusText,
           errorText
         });
+        
+        // Tratar erro 401 especificamente
+        if (response.status === 401) {
+          handleHttpError(response, 'DELETE', url);
+        }
+        
         throw new Error(`Erro na requisição DELETE: ${response.status} ${response.statusText} - ${errorText}`);
       }
 

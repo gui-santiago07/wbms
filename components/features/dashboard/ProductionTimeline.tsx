@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, memo, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import {
   BarChart,
   Bar,
@@ -12,6 +12,7 @@ import {
 } from 'recharts';
 import { useProductionStore } from '../../../store/useProductionStore';
 import { useDeviceSettingsStore } from '../../../store/useDeviceSettingsStore';
+import { useTimelineStore } from '../../../store/useTimelineStore';
 import { useTimelineData } from '../../../hooks/useTimelineData';
 import { TimelineFilters, ShareTimelineData } from '../../../services/timelineService';
 import Card from '../../ui/Card';
@@ -35,34 +36,44 @@ interface ProcessedTimelineData {
   timeDomain: [number, number];
 }
 
-// Função para transformar dados em linha única
+// Função para transformar dados em linha única (OTIMIZADA)
 function transformarParaLinhaUnica(eventos: any[], yLabel: string, minTime: number, getColor: (item: any) => string, getLabel: (item: any) => string) {
   if (!eventos || eventos.length === 0) {
     return [];
   }
 
-  const linhaUnica: any = {
-    yLabel: yLabel,
-  };
+  try {
+    const linhaUnica: any = {
+      yLabel: yLabel,
+    };
 
-  // 1. Calcula o espaçador inicial
-  const primeiroEventoStartTime = new Date(eventos[0].start).getTime();
-  const graficoMinTime = minTime;
-  linhaUnica.spacer = primeiroEventoStartTime - graficoMinTime;
+    // 1. Removido espaçador para eliminar espaço em branco no início
+    // Os dados agora começam exatamente no início do gráfico
+    // linhaUnica.spacer = 0; // Não é mais necessário
 
-  // 2. Adiciona cada evento como uma propriedade única
-  eventos.forEach((evento, index) => {
-    const startTime = new Date(evento.start).getTime();
-    const endTime = new Date(evento.end).getTime();
-    const duracao = endTime - startTime;
+    // 2. Adiciona cada evento como uma propriedade única (LIMITADO A 50 EVENTOS)
+    const eventosLimitados = eventos.slice(0, 50); // Limitar para evitar travamento
+    
+    eventosLimitados.forEach((evento, index) => {
+      try {
+        const startTime = new Date(evento.start).getTime();
+        const endTime = new Date(evento.end).getTime();
+        const duracao = Math.max(0, endTime - startTime); // Evitar durações negativas
 
-    // Cria uma chave única para a duração e para a cor
-    linhaUnica[`evento_${index}_duracao`] = duracao;
-    linhaUnica[`evento_${index}_cor`] = getColor(evento);
-    linhaUnica[`evento_${index}_label`] = getLabel(evento);
-  });
+        // Cria uma chave única para a duração e para a cor
+        linhaUnica[`evento_${index}_duracao`] = duracao;
+        linhaUnica[`evento_${index}_cor`] = getColor(evento);
+        linhaUnica[`evento_${index}_label`] = getLabel(evento);
+      } catch (error) {
+        console.warn('Erro ao processar evento:', error);
+      }
+    });
 
-  return [linhaUnica];
+    return [linhaUnica];
+  } catch (error) {
+    console.error('Erro na transformação de dados:', error);
+    return [];
+  }
 }
 
 // Componente CustomTooltip que usa posição do mouse e lista original de dados
@@ -84,7 +95,8 @@ const CustomTooltip: React.FC<CustomTooltipProps> = ({
   chartWidth, 
   type 
 }) => {
-  if (!active || !coordinate || !originalData || originalData.length === 0) {
+  // Verificar se originalData é um array válido
+  if (!active || !coordinate || !originalData || !Array.isArray(originalData) || originalData.length === 0) {
     return null;
   }
 
@@ -97,9 +109,17 @@ const CustomTooltip: React.FC<CustomTooltipProps> = ({
 
   // Encontrar o item que estava acontecendo naquele momento
   const currentItem = originalData.find(item => {
-    const startTime = new Date(item.start).getTime();
-    const endTime = new Date(item.end).getTime();
-    return mouseTimestamp >= startTime && mouseTimestamp <= endTime;
+    try {
+      if (!item || !item.start || !item.end) {
+        return false;
+      }
+      const startTime = new Date(item.start).getTime();
+      const endTime = new Date(item.end).getTime();
+      return mouseTimestamp >= startTime && mouseTimestamp <= endTime;
+    } catch (error) {
+      console.warn('Erro ao processar item no tooltip:', error);
+      return false;
+    }
   });
 
   if (!currentItem) {
@@ -159,12 +179,24 @@ const CustomTooltip: React.FC<CustomTooltipProps> = ({
   );
 };
 
-// Componente para o gráfico de Turnos
-const ShiftsChart: React.FC<{ 
+// Componente para o gráfico de Turnos (OTIMIZADO)
+const ShiftsChart = memo<{ 
   data: any[]; 
   timeDomain: [number, number]; 
   originalData: any[];
-}> = ({ data, timeDomain, originalData }) => {
+}>(({ data, timeDomain, originalData }) => {
+  // Memoizar chaves dos eventos para evitar recálculo
+  const chavesEventos = useMemo(() => {
+    if (!data || data.length === 0) return [];
+    return Object.keys(data[0] || {}).filter(key => key.includes('_duracao'));
+  }, [data]);
+
+  // Memoizar dados processados
+  const processedData = useMemo(() => {
+    if (!data || data.length === 0) return [];
+    return data;
+  }, [data]);
+
   if (!data || data.length === 0) {
     return (
       <div className="h-16 bg-gray-800 rounded flex items-center justify-center">
@@ -172,9 +204,6 @@ const ShiftsChart: React.FC<{
       </div>
     );
   }
-
-  // Pega as chaves dos eventos para renderizar as barras dinamicamente
-  const chavesEventos = Object.keys(data[0] || {}).filter(key => key.includes('_duracao'));
 
   return (
     <div className="mb-4">
@@ -226,14 +255,26 @@ const ShiftsChart: React.FC<{
       </div>
     </div>
   );
-};
+});
 
-// Componente para o gráfico de Produtos
-const ProductsChart: React.FC<{ 
+// Componente para o gráfico de Produtos (OTIMIZADO)
+const ProductsChart = memo<{ 
   data: any[]; 
   timeDomain: [number, number]; 
   originalData: any[];
-}> = ({ data, timeDomain, originalData }) => {
+}>(({ data, timeDomain, originalData }) => {
+  // Memoizar chaves dos eventos para evitar recálculo
+  const chavesEventos = useMemo(() => {
+    if (!data || data.length === 0) return [];
+    return Object.keys(data[0] || {}).filter(key => key.includes('_duracao'));
+  }, [data]);
+
+  // Memoizar dados processados
+  const processedData = useMemo(() => {
+    if (!data || data.length === 0) return [];
+    return data;
+  }, [data]);
+
   if (!data || data.length === 0) {
     return (
       <div className="h-16 bg-gray-800 rounded flex items-center justify-center">
@@ -241,9 +282,6 @@ const ProductsChart: React.FC<{
       </div>
     );
   }
-
-  // Pega as chaves dos eventos para renderizar as barras dinamicamente
-  const chavesEventos = Object.keys(data[0] || {}).filter(key => key.includes('_duracao'));
 
   return (
     <div className="mb-4">
@@ -295,14 +333,14 @@ const ProductsChart: React.FC<{
       </div>
     </div>
   );
-};
+});
 
-// Componente para o gráfico de Eventos
-const EventsChart: React.FC<{ 
+// Componente para o gráfico de Eventos (OTIMIZADO)
+const EventsChart = memo<{ 
   data: any[]; 
   timeDomain: [number, number]; 
   originalData: any[];
-}> = ({ data, timeDomain, originalData }) => {
+}>(({ data, timeDomain, originalData }) => {
   if (!data || data.length === 0) {
     return (
       <div className="h-16 bg-gray-800 rounded flex items-center justify-center">
@@ -373,27 +411,40 @@ const EventsChart: React.FC<{
       </div>
     </div>
   );
-};
+});
 
 // Componente principal da Timeline
-const TimelineChart: React.FC<{ 
+const TimelineChart = memo<{ 
   processedData: ProcessedTimelineData;
   originalData: {
     shifts: any[];
     products: any[];
     events: any[];
   };
-}> = ({ processedData, originalData }) => {
+}>(({ processedData, originalData }) => {
   const { shiftsData, productsData, eventsData, timeDomain } = processedData;
+
+  // Memoizar os componentes de gráfico para evitar re-renderização desnecessária
+  const memoizedShiftsChart = useMemo(() => (
+    <ShiftsChart data={shiftsData} timeDomain={timeDomain} originalData={originalData.shifts} />
+  ), [shiftsData, timeDomain, originalData.shifts]);
+
+  const memoizedProductsChart = useMemo(() => (
+    <ProductsChart data={productsData} timeDomain={timeDomain} originalData={originalData.products} />
+  ), [productsData, timeDomain, originalData.products]);
+
+  const memoizedEventsChart = useMemo(() => (
+    <EventsChart data={eventsData} timeDomain={timeDomain} originalData={originalData.events} />
+  ), [eventsData, timeDomain, originalData.events]);
 
   return (
     <div className="space-y-2">
-      <ShiftsChart data={shiftsData} timeDomain={timeDomain} originalData={originalData.shifts} />
-      <ProductsChart data={productsData} timeDomain={timeDomain} originalData={originalData.products} />
-      <EventsChart data={eventsData} timeDomain={timeDomain} originalData={originalData.events} />
+      {memoizedShiftsChart}
+      {memoizedProductsChart}
+      {memoizedEventsChart}
     </div>
   );
-};
+});
 
 const ProductionTimeline: React.FC = () => {
   const { deviceSettings } = useDeviceSettingsStore();
@@ -405,6 +456,9 @@ const ProductionTimeline: React.FC = () => {
     sector: '',
     lines: []
   });
+  
+  // Store para gerenciar linhas selecionadas
+  const { setSelectedLines, setHasGeneratedTimeline } = useTimelineStore();
   
   // Hook para gerenciar dados da timeline
   const { 
@@ -419,21 +473,67 @@ const ProductionTimeline: React.FC = () => {
     loadLines,
     generateTimeline,
     shareTimeline,
-    clearError
+    clearError,
+    getCacheStats
   } = useTimelineData();
 
   // Estados para modais
   const [showShareModal, setShowShareModal] = useState(false);
   const [shareEmail, setShareEmail] = useState('');
   const [shareLoading, setShareLoading] = useState(false);
+  const [showDebugInfo, setShowDebugInfo] = useState(false);
+
+  // Estatísticas do cache
+  const [cacheStats, setCacheStats] = useState({ cacheSize: 0, queueSize: 0, isProcessing: false });
+  
+  // Estado para estabilizar os charts e evitar piscamento
+  const [stableTimelineData, setStableTimelineData] = useState<any>(null);
+  const [isChartStable, setIsChartStable] = useState(false);
+
+  // Atualizar estatísticas do cache periodicamente
+  useEffect(() => {
+    const updateCacheStats = () => {
+      const stats = getCacheStats();
+      setCacheStats(stats);
+    };
+
+    updateCacheStats();
+    const interval = setInterval(updateCacheStats, 2000); // Atualizar a cada 2 segundos
+
+    return () => clearInterval(interval);
+  }, [getCacheStats]);
+
+  // Estabilizar dados dos charts para evitar piscamento
+  useEffect(() => {
+    if (timelineData && timelineData.success && timelineData.data) {
+      // Aguardar um pequeno delay para estabilizar
+      const timer = setTimeout(() => {
+        setStableTimelineData(timelineData);
+        setIsChartStable(true);
+      }, 100); // 100ms de delay para estabilizar
+
+      return () => clearTimeout(timer);
+    } else {
+      setIsChartStable(false);
+    }
+  }, [timelineData]);
 
   // Carregar opções de filtro apenas uma vez na montagem
   useEffect(() => {
     loadPlants();
+    
+    // Limpeza ao desmontar o componente
+    return () => {
+      setSelectedLines([]);
+      setHasGeneratedTimeline(false);
+    };
   }, []);
 
   const handlePlantChange = (plantId: string) => {
     setFilterData(prev => ({ ...prev, plant: plantId, sector: '', lines: [] }));
+    // Limpar linhas selecionadas e status da timeline
+    setSelectedLines([]);
+    setHasGeneratedTimeline(false);
     if (plantId) {
       loadSectors(plantId);
     }
@@ -441,6 +541,9 @@ const ProductionTimeline: React.FC = () => {
 
   const handleSectorChange = (sectorId: string) => {
     setFilterData(prev => ({ ...prev, sector: sectorId, lines: [] }));
+    // Limpar linhas selecionadas e status da timeline
+    setSelectedLines([]);
+    setHasGeneratedTimeline(false);
     if (sectorId) {
       loadLines(sectorId);
     }
@@ -448,6 +551,8 @@ const ProductionTimeline: React.FC = () => {
 
   const handleLineChange = (lineIds: string[]) => {
     setFilterData(prev => ({ ...prev, lines: lineIds }));
+    // Atualizar linhas selecionadas no store
+    setSelectedLines(lineIds);
   };
 
   const handleGenerateTimeline = async () => {
@@ -458,14 +563,16 @@ const ProductionTimeline: React.FC = () => {
 
     try {
       const timelineFilters: TimelineFilters = {
-        startDate: filterData.startDate,
-        endDate: filterData.endDate,
-        plant: filterData.plant,
-        sector: filterData.sector,
-        lines: filterData.lines
+        start_period: filterData.startDate,
+        end_period: filterData.endDate,
+        filtros: {
+          linhas: filterData.lines
+        }
       };
       
       await generateTimeline(timelineFilters);
+      // Marcar que a timeline foi gerada com sucesso
+      setHasGeneratedTimeline(true);
       setShowFilters(false);
     } catch (error) {
       console.error('Erro ao gerar timeline:', error);
@@ -481,11 +588,11 @@ const ProductionTimeline: React.FC = () => {
         email: shareEmail,
         chartImage: '',
         filters: {
-          startDate: filterData.startDate,
-          endDate: filterData.endDate,
-          plant: filterData.plant,
-          sector: filterData.sector,
-          lines: filterData.lines
+          start_period: filterData.startDate,
+          end_period: filterData.endDate,
+          filtros: {
+            linhas: filterData.lines
+          }
         }
       };
       
@@ -519,9 +626,19 @@ const ProductionTimeline: React.FC = () => {
     }
   };
 
-  // Processar dados para os gráficos
+  // Processar dados para os gráficos (OTIMIZADO COM MEMOIZAÇÃO AVANÇADA)
   const processedData = useMemo((): ProcessedTimelineData => {
-    if (!timelineData) {
+    console.log('🔄 Processando dados da timeline...');
+    
+    // Timeout para evitar travamento
+    const startTime = Date.now();
+    const TIMEOUT_MS = 5000; // 5 segundos
+    
+    // Usar dados estáveis para evitar piscamento
+    const dataToProcess = isChartStable ? stableTimelineData : timelineData;
+    
+    if (!dataToProcess || !dataToProcess.success || !dataToProcess.data) {
+      console.log('⚠️ Nenhum dado de timeline disponível');
       return {
         shiftsData: [],
         productsData: [],
@@ -531,131 +648,174 @@ const ProductionTimeline: React.FC = () => {
     }
 
     try {
-      // Passo 1: Definir o domínio de tempo
+      // Passo 1: Definir o domínio de tempo (SIMPLIFICADO)
       const allTimestamps: number[] = [];
       
-      // Coletar timestamps de todos os eventos
-      timelineData.events?.forEach(event => {
-        allTimestamps.push(new Date(event.start).getTime());
-        allTimestamps.push(new Date(event.end).getTime());
-      });
-      
-      timelineData.products?.forEach(product => {
-        allTimestamps.push(new Date(product.start).getTime());
-        allTimestamps.push(new Date(product.end).getTime());
-      });
-      
-      timelineData.shifts?.forEach(shift => {
-        allTimestamps.push(new Date(shift.start).getTime());
-        allTimestamps.push(new Date(shift.end).getTime());
-      });
+      // Coletar timestamps apenas da primeira linha (para simplificar)
+      const firstLineData = Object.values(dataToProcess.data)[0];
+      if (firstLineData) {
+        // Eventos
+        firstLineData.events?.forEach(event => {
+          allTimestamps.push(new Date(event.start_time).getTime());
+          allTimestamps.push(new Date(event.end_time).getTime());
+        });
+        
+        // Produtos
+        firstLineData.products?.forEach(product => {
+          allTimestamps.push(new Date(product.start_time).getTime());
+          allTimestamps.push(new Date(product.end_time).getTime());
+        });
+        
+        // Turnos
+        firstLineData.shifts?.forEach(shift => {
+          allTimestamps.push(new Date(shift.start_time).getTime());
+          allTimestamps.push(new Date(shift.end_time).getTime());
+        });
+      }
 
+      if (allTimestamps.length === 0) {
+        console.log('⚠️ Nenhum timestamp encontrado');
+        return {
+          shiftsData: [],
+          productsData: [],
+          eventsData: [],
+          timeDomain: [0, 1]
+        };
+      }
+
+      // Domínio de tempo otimizado para eliminar espaço em branco
       const minTime = Math.min(...allTimestamps);
       const maxTime = Math.max(...allTimestamps);
+      
+      // Usar domínio exato sem margens para eliminar espaço em branco
       const timeDomain: [number, number] = [minTime, maxTime];
 
+      console.log('📊 Domínio de tempo:', { minTime, maxTime, range: maxTime - minTime });
 
+      // Passo 2: Consolidar dados (SIMPLIFICADO - apenas primeira linha)
+      const allEvents: any[] = [];
+      const allProducts: any[] = [];
+      const allShifts: any[] = [];
 
-      // Passo 2: Processar dados de Turnos usando linha única
-      const shiftsData = transformarParaLinhaUnica(
-        timelineData.shifts || [],
-        'Turnos',
-        minTime,
-        (shift) => {
-          // Calcular OEE baseado nos eventos do turno
-          const startTime = new Date(shift.start).getTime();
-          const endTime = new Date(shift.end).getTime();
-          const duration = endTime - startTime;
+      const firstLine = Object.entries(timelineData.data)[0];
+      if (firstLine) {
+        const [lineName, lineData] = firstLine;
+        
+        // Converter eventos para formato compatível (COM TIMEOUT)
+        lineData.events?.forEach((event, index) => {
+          // Verificar timeout a cada 10 eventos
+          if (index % 10 === 0 && Date.now() - startTime > TIMEOUT_MS) {
+            console.warn('⚠️ Timeout durante processamento de eventos');
+            return;
+          }
           
-          const shiftEvents = timelineData.events?.filter(event => {
-            const eventStart = new Date(event.start).getTime();
-            const eventEnd = new Date(event.end).getTime();
-            return eventStart >= startTime && eventEnd <= endTime;
-          }) || [];
-          
-          const runTime = shiftEvents
-            .filter(event => event.status === 'Run')
-            .reduce((total, event) => total + (event.duration * 1000), 0);
-          
-          const oee = duration > 0 ? (runTime / duration) * 100 : 0;
-          return getOeeColor(oee);
-        },
-        (shift) => {
-          // Calcular OEE para o label
-          const startTime = new Date(shift.start).getTime();
-          const endTime = new Date(shift.end).getTime();
-          const duration = endTime - startTime;
-          
-          const shiftEvents = timelineData.events?.filter(event => {
-            const eventStart = new Date(event.start).getTime();
-            const eventEnd = new Date(event.end).getTime();
-            return eventStart >= startTime && eventEnd <= endTime;
-          }) || [];
-          
-          const runTime = shiftEvents
-            .filter(event => event.status === 'Run')
-            .reduce((total, event) => total + (event.duration * 1000), 0);
-          
-          const oee = duration > 0 ? (runTime / duration) * 100 : 0;
-          return `${shift.shiftName} - ${oee.toFixed(2)}%`;
-        }
-      );
+          allEvents.push({
+            start: event.start_time,
+            end: event.end_time,
+            status: event.state_text === 'run_enum' ? 'Run' : 
+                   event.state_text === 'down_enum' ? 'Down' : 
+                   event.state_text === 'setup_enum' ? 'Setup' : 'Standby',
+            description: event.events_name || 'Evento',
+            duration: (new Date(event.end_time).getTime() - new Date(event.start_time).getTime()) / 1000
+          });
+        });
 
-      // Passo 3: Processar dados de Produtos usando linha única
-      const productsData = transformarParaLinhaUnica(
-        timelineData.products || [],
-        'Produtos',
-        minTime,
-        (product) => {
-          // Calcular OEE baseado nos eventos do produto
-          const startTime = new Date(product.start).getTime();
-          const endTime = new Date(product.end).getTime();
-          const duration = endTime - startTime;
+        // Converter produtos para formato compatível (COM TIMEOUT)
+        lineData.products?.forEach((product, index) => {
+          // Verificar timeout a cada 5 produtos
+          if (index % 5 === 0 && Date.now() - startTime > TIMEOUT_MS) {
+            console.warn('⚠️ Timeout durante processamento de produtos');
+            return;
+          }
           
-          const productEvents = timelineData.events?.filter(event => {
-            const eventStart = new Date(event.start).getTime();
-            const eventEnd = new Date(event.end).getTime();
-            return eventStart >= startTime && eventEnd <= endTime;
-          }) || [];
-          
-          const runTime = productEvents
-            .filter(event => event.status === 'Run')
-            .reduce((total, event) => total + (event.duration * 1000), 0);
-          
-          const oee = duration > 0 ? (runTime / duration) * 100 : 0;
-          return getOeeColor(oee);
-        },
-        (product) => {
-          // Calcular OEE para o label
-          const startTime = new Date(product.start).getTime();
-          const endTime = new Date(product.end).getTime();
-          const duration = endTime - startTime;
-          
-          const productEvents = timelineData.events?.filter(event => {
-            const eventStart = new Date(event.start).getTime();
-            const eventEnd = new Date(event.end).getTime();
-            return eventStart >= startTime && eventEnd <= endTime;
-          }) || [];
-          
-          const runTime = productEvents
-            .filter(event => event.status === 'Run')
-            .reduce((total, event) => total + (event.duration * 1000), 0);
-          
-          const oee = duration > 0 ? (runTime / duration) * 100 : 0;
-          return `${product.productName} - ${oee.toFixed(2)}%`;
-        }
-      );
+          allProducts.push({
+            start: product.start_time,
+            end: product.end_time,
+            productName: product.product_id,
+            quantity: product.total_count,
+            duration: (new Date(product.end_time).getTime() - new Date(product.start_time).getTime()) / 1000
+          });
+        });
 
-      // Passo 4: Processar dados de Eventos usando linha única
-      const eventsData = transformarParaLinhaUnica(
-        timelineData.events || [],
-        'Eventos',
-        minTime,
-        (event) => getStatusColor(event.status),
-        (event) => event.status
-      );
+        // Converter turnos para formato compatível (COM TIMEOUT)
+        lineData.shifts?.forEach((shift, index) => {
+          // Verificar timeout a cada 3 turnos
+          if (index % 3 === 0 && Date.now() - startTime > TIMEOUT_MS) {
+            console.warn('⚠️ Timeout durante processamento de turnos');
+            return;
+          }
+          
+          allShifts.push({
+            start: shift.start_time,
+            end: shift.end_time,
+            shiftName: shift.shift_id,
+            duration: (new Date(shift.end_time).getTime() - new Date(shift.start_time).getTime()) / 1000
+          });
+        });
+      }
 
+      console.log('📊 Dados consolidados:', {
+        events: allEvents.length,
+        products: allProducts.length,
+        shifts: allShifts.length
+      });
 
+      // Passo 3: Processar dados de Turnos (SIMPLIFICADO)
+      let shiftsData: any[] = [];
+      try {
+        shiftsData = transformarParaLinhaUnica(
+          allShifts,
+          'Turnos',
+          minTime,
+          (shift) => '#3b82f6', // Cor fixa para simplificar
+          (shift) => shift.shiftName
+        );
+      } catch (error) {
+        console.warn('⚠️ Erro ao processar turnos, usando fallback:', error);
+        shiftsData = [];
+      }
+
+      // Passo 4: Processar dados de Produtos (SIMPLIFICADO)
+      let productsData: any[] = [];
+      try {
+        productsData = transformarParaLinhaUnica(
+          allProducts,
+          'Produtos',
+          minTime,
+          (product) => '#22c55e', // Cor fixa para simplificar
+          (product) => product.productName
+        );
+      } catch (error) {
+        console.warn('⚠️ Erro ao processar produtos, usando fallback:', error);
+        productsData = [];
+      }
+
+      // Passo 5: Processar dados de Eventos (SIMPLIFICADO)
+      let eventsData: any[] = [];
+      try {
+        eventsData = transformarParaLinhaUnica(
+          allEvents,
+          'Eventos',
+          minTime,
+          (event) => getStatusColor(event.status),
+          (event) => event.status
+        );
+      } catch (error) {
+        console.warn('⚠️ Erro ao processar eventos, usando fallback:', error);
+        eventsData = [];
+      }
+
+      const processingTime = Date.now() - startTime;
+      console.log('✅ Processamento concluído em', processingTime, 'ms:', {
+        shiftsData: shiftsData.length,
+        productsData: productsData.length,
+        eventsData: eventsData.length
+      });
+
+      // Verificar timeout
+      if (processingTime > TIMEOUT_MS) {
+        console.warn('⚠️ Processamento demorou muito tempo:', processingTime, 'ms');
+      }
 
       return {
         shiftsData,
@@ -664,12 +824,90 @@ const ProductionTimeline: React.FC = () => {
         timeDomain
       };
     } catch (error) {
-      console.error('Erro ao processar dados da timeline:', error);
+      console.error('❌ Erro ao processar dados da timeline:', error);
       return {
         shiftsData: [],
         productsData: [],
         eventsData: [],
         timeDomain: [0, 1]
+      };
+    }
+  }, [timelineData, stableTimelineData, isChartStable]);
+
+  // Processar dados originais para o tooltip (OTIMIZADO)
+  const originalData = useMemo(() => {
+    console.log('🔄 Processando dados originais para tooltip...');
+    
+    if (!timelineData || !timelineData.success || !timelineData.data) {
+      console.log('⚠️ Nenhum dado de timeline disponível para originalData');
+      return {
+        shifts: [],
+        products: [],
+        events: []
+      };
+    }
+
+    try {
+      const allEvents: any[] = [];
+      const allProducts: any[] = [];
+      const allShifts: any[] = [];
+
+      const firstLine = Object.entries(timelineData.data)[0];
+      if (firstLine) {
+        const [lineName, lineData] = firstLine;
+        
+        // Converter eventos para formato compatível
+        lineData.events?.forEach(event => {
+          allEvents.push({
+            start: event.start_time,
+            end: event.end_time,
+            status: event.state_text === 'run_enum' ? 'Run' : 
+                   event.state_text === 'down_enum' ? 'Down' : 
+                   event.state_text === 'setup_enum' ? 'Setup' : 'Standby',
+            description: event.events_name || 'Evento',
+            duration: (new Date(event.end_time).getTime() - new Date(event.start_time).getTime()) / 1000
+          });
+        });
+
+        // Converter produtos para formato compatível
+        lineData.products?.forEach(product => {
+          allProducts.push({
+            start: product.start_time,
+            end: product.end_time,
+            productName: product.product_id,
+            quantity: product.total_count,
+            duration: (new Date(product.end_time).getTime() - new Date(product.start_time).getTime()) / 1000
+          });
+        });
+
+        // Converter turnos para formato compatível
+        lineData.shifts?.forEach(shift => {
+          allShifts.push({
+            start: shift.start_time,
+            end: shift.end_time,
+            shiftName: shift.shift_id,
+            duration: (new Date(shift.end_time).getTime() - new Date(shift.start_time).getTime()) / 1000
+          });
+        });
+      }
+
+      console.log('✅ Dados originais processados:', {
+        shifts: allShifts.length,
+        products: allProducts.length,
+        events: allEvents.length
+      });
+
+      return {
+        shifts: allShifts,
+        products: allProducts,
+        events: allEvents
+      };
+    } catch (error) {
+      console.error('❌ Erro ao processar dados originais:', error);
+      return {
+        shifts: [],
+        products: [],
+        events: []
       };
     }
   }, [timelineData]);
@@ -911,11 +1149,7 @@ const ProductionTimeline: React.FC = () => {
             <div className="w-full">
               <TimelineChart 
                 processedData={processedData} 
-                originalData={{
-                  shifts: timelineData?.shifts || [],
-                  products: timelineData?.products || [],
-                  events: timelineData?.events || []
-                }}
+                originalData={originalData}
               />
             </div>
           </Card>
@@ -942,34 +1176,36 @@ const ProductionTimeline: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {timelineData.status && Object.entries(timelineData.status).map(([status, stats]: [string, any]) => (
-                    <tr key={status} className="border-b border-gray-800 hover:bg-gray-800">
-                      <td className="py-3 px-4">
-                        <div className="flex items-center">
-                          <div 
-                            className="w-3 h-3 rounded-full mr-2"
-                            style={{ backgroundColor: getStatusColor(status) }}
-                          />
-                          <span className="text-white">{status}</span>
-                        </div>
-                      </td>
-                      <td className="text-center py-3 px-4 text-white">
-                        {stats.occurrences}
-                      </td>
-                      <td className="text-center py-3 px-4 text-white">
-                        {formatDuration(stats.totalTime)}
-                      </td>
-                      <td className="text-center py-3 px-4 text-white">
-                        {formatDuration(stats.minTime)}
-                      </td>
-                      <td className="text-center py-3 px-4 text-white">
-                        {formatDuration(stats.avgTime)}
-                      </td>
-                      <td className="text-center py-3 px-4 text-white">
-                        {formatDuration(stats.maxTime)}
-                      </td>
-                    </tr>
-                  ))}
+                  {timelineData.data && Object.values(timelineData.data).map((lineData, lineIndex) => 
+                    lineData.status && Object.entries(lineData.status).map(([status, stats]: [string, any]) => (
+                      <tr key={`${lineIndex}-${status}`} className="border-b border-gray-800 hover:bg-gray-800">
+                        <td className="py-3 px-4">
+                          <div className="flex items-center">
+                            <div 
+                              className="w-3 h-3 rounded-full mr-2"
+                              style={{ backgroundColor: getStatusColor(status) }}
+                            />
+                            <span className="text-white">{status}</span>
+                          </div>
+                        </td>
+                        <td className="text-center py-3 px-4 text-white">
+                          {stats.occurrences}
+                        </td>
+                        <td className="text-center py-3 px-4 text-white">
+                          {formatDuration(stats.duration)}
+                        </td>
+                        <td className="text-center py-3 px-4 text-white">
+                          {formatDuration(stats.min)}
+                        </td>
+                        <td className="text-center py-3 px-4 text-white">
+                          {formatDuration(stats.duration / stats.occurrences)}
+                        </td>
+                        <td className="text-center py-3 px-4 text-white">
+                          {formatDuration(stats.max)}
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -996,6 +1232,32 @@ const ProductionTimeline: React.FC = () => {
       {/* Modais */}
       {showFilters && <FiltersModal />}
       {showShareModal && <ShareModal />}
+
+      {/* Debug Info (apenas em desenvolvimento) */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="fixed bottom-4 right-4 bg-gray-900 border border-gray-700 rounded-lg p-3 text-xs text-white z-50">
+          <div className="flex items-center justify-between mb-2">
+            <span className="font-semibold">Cache Debug</span>
+            <button
+              onClick={() => setShowDebugInfo(!showDebugInfo)}
+              className="text-gray-400 hover:text-white"
+            >
+              {showDebugInfo ? '−' : '+'}
+            </button>
+          </div>
+          
+          {showDebugInfo && (
+            <div className="space-y-1">
+              <div>Cache: {cacheStats.cacheSize} items</div>
+              <div>Fila: {cacheStats.queueSize} requests</div>
+              <div>Processando: {cacheStats.isProcessing ? 'Sim' : 'Não'}</div>
+              <div>Timeline: {timelineData ? 'Carregada' : 'Vazia'}</div>
+              <div>Linhas: {selectedLines.length}</div>
+              <div>Gerada: {hasGeneratedTimeline ? 'Sim' : 'Não'}</div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };

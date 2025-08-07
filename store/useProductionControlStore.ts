@@ -9,6 +9,7 @@ import {
   StopProductionData 
 } from '../types';
 import productionService from '../services/productionService';
+import { pollingManager } from '../services/api';
 
 interface ProductionControlActions {
   // Ações de verificação
@@ -251,6 +252,9 @@ export const useProductionControlStore = create<ProductionControlStore>((set, ge
       }
     }, 30000);
     
+    // Registrar intervalo no sistema centralizado
+    pollingManager.registerInterval(intervalId);
+    
     // Armazena o ID do intervalo para limpeza posterior
     (window as any).productionPollingInterval = intervalId;
   },
@@ -262,6 +266,7 @@ export const useProductionControlStore = create<ProductionControlStore>((set, ge
     const intervalId = (window as any).productionPollingInterval;
     if (intervalId) {
       clearInterval(intervalId);
+      pollingManager.unregisterInterval(intervalId);
       (window as any).productionPollingInterval = null;
     }
   },

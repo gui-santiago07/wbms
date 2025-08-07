@@ -12,6 +12,7 @@ export enum MachineStatus {
 export enum ViewState {
   DASHBOARD = 'DASHBOARD',
   STOP_REASON = 'STOP_REASON',
+  PAUSE_REASON = 'PAUSE_REASON',
   SETUP = 'SETUP',
   HELP = 'HELP',
   OEE = 'OEE',

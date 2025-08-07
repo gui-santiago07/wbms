@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useProductionStore } from '../store/useProductionStore';
+import { pollingManager } from '../services/api';
 
 /**
  * Hook para detecção silenciosa de turno
@@ -15,7 +16,13 @@ export const useSilentShiftDetection = () => {
       checkShiftIfNeeded();
     }, 5 * 60 * 1000); // 5 minutos
 
-    return () => clearInterval(interval);
+    // Registrar intervalo no sistema centralizado
+    pollingManager.registerInterval(interval);
+
+    return () => {
+      clearInterval(interval);
+      pollingManager.unregisterInterval(interval);
+    };
   }, [checkShiftIfNeeded]);
 
   // Verificar turno na inicialização

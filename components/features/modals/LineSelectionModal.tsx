@@ -3,6 +3,7 @@ import Card from '../../ui/Card';
 import LoadingSpinner from '../../ui/LoadingSpinner';
 import ErrorMessage from '../../ui/ErrorMessage';
 import { useDeviceSettingsStore } from '../../../store/useDeviceSettingsStore';
+import { useProductionStore } from '../../../store/useProductionStore';
 import { useAuth } from '../../../contexts/AuthContext';
 
 interface Plant {
@@ -35,6 +36,7 @@ const LineSelectionModal: React.FC<LineSelectionModalProps> = ({
 }) => {
   const { user } = useAuth();
   const { deviceSettings, updateDeviceSettings } = useDeviceSettingsStore();
+  const { loadInitialProductionData } = useProductionStore();
   
   // Estados do modal
   const [currentStep, setCurrentStep] = useState<SelectionStep>('plants');
@@ -224,6 +226,9 @@ const LineSelectionModal: React.FC<LineSelectionModalProps> = ({
         lineId: selectedLine.id,
         isConfigured: true
       });
+
+      // Carregar dados de produção imediatamente após seleção da linha
+      await loadInitialProductionData(selectedLine.id);
 
       // Confirmar seleção
       onConfirm(selectedLine);

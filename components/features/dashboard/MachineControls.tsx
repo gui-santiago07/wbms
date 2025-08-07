@@ -31,7 +31,10 @@ const ControlButton: React.FC<ControlButtonProps> = ({ label, icon, onClick, col
 
 const MachineControls: React.FC<MachineControlsProps> = ({ isFixed = false }) => {
   const { setMachineStatus, startSetup, setView, machineStatus, registerEvent } = useProductionStore();
-  const setPaused = () => setMachineStatus(MachineStatus.PAUSED);
+  const setPaused = () => {
+    setView(ViewState.PAUSE_REASON);
+    setMachineStatus(MachineStatus.PAUSED);
+  };
   const setDown = async () => {
     await registerEvent('DOWN');
     setMachineStatus(MachineStatus.DOWN);
@@ -109,7 +112,10 @@ const MachineControls: React.FC<MachineControlsProps> = ({ isFixed = false }) =>
             <ControlButton 
                 label="Pause" 
                 icon={<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>}
-                onClick={setPaused}
+                onClick={() => {
+                  console.log('🔄 MachineControls: Botão Pause clicado (não-fixo)!');
+                  setPaused();
+                }}
                 colorClass="bg-orange-500 hover:bg-orange-600"
                 isActive={machineStatus === MachineStatus.PAUSED}
             />

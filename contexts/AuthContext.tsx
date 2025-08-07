@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import ApiClient from '../services/api';
+import { authErrorHandler } from '../services/api';
 import { cleanPhpSerializedString, cleanPhpSerializedObject } from '../utils/stringUtils';
 
 interface User {
@@ -25,6 +26,32 @@ const apiClient = new ApiClient();
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Função de logout que será registrada no sistema de logout automático
+  const handleLogout = () => {
+    console.log('🔧 AuthContext: Executando logout automático');
+    
+    // Limpar estado do usuário
+    setUser(null);
+    
+    // Limpar localStorage
+    localStorage.removeItem('oee_user');
+    
+    // Fazer logout no ApiClient
+    apiClient.logout();
+    
+    console.log('✅ AuthContext: Logout automático concluído');
+  };
+
+  // Registrar callback de logout no sistema de erro 401
+  useEffect(() => {
+    authErrorHandler.registerLogoutCallback(handleLogout);
+    
+    // Cleanup: remover callback quando componente for desmontado
+    return () => {
+      authErrorHandler.unregisterLogoutCallback(handleLogout);
+    };
+  }, []);
 
   // Verificar se há usuário logado no localStorage ao inicializar
   useEffect(() => {
@@ -84,8 +111,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const logout = () => {
+    console.log('🔧 AuthContext: Executando logout manual');
+    
+    // Limpar estado do usuário
     setUser(null);
+    
+    // Limpar localStorage
     localStorage.removeItem('oee_user');
+    
+    // Fazer logout no ApiClient
+    apiClient.logout();
+    
+    console.log('✅ AuthContext: Logout manual concluído');
   };
 
   const value: AuthContextType = {

@@ -11,8 +11,9 @@ import ProductionDetails from '../components/features/dashboard/ProductionDetail
 import ProductionChart from '../components/features/dashboard/ProductionChart';
 import MachineControls from '../components/features/dashboard/MachineControls';
 import StopReasonModal from '../components/features/modals/StopReasonModal';
+import PauseReasonModal from '../components/features/modals/PauseReasonModal';
 import ShiftModal from '../components/features/modals/ShiftModal';
-import { useLiveDataPolling } from '../hooks/useLiveDataPolling';
+// import { useLiveDataPolling } from '../hooks/useLiveDataPolling';
 import { useMachineControlsVisibility } from '../hooks/useMachineControlsVisibility';
 import { useShiftDetection } from '../hooks/useShiftDetection';
 import Card from '../components/ui/Card';
@@ -20,7 +21,7 @@ import Sidebar from '../components/features/dashboard/Sidebar';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import ErrorMessage from '../components/ui/ErrorMessage';
 
-import { config } from '../config/environment';
+// import { config } from '../config/environment';
 
 const DashboardView: React.FC = () => {
   const { liveMetrics, currentJob } = useProductionStore();
@@ -73,11 +74,13 @@ const DashboardPage: React.FC = () => {
   const { view, setView, initializeDashboard, isLoading, error, currentShift } = useProductionStore();
   const { currentShift: detectedShift, isLoading: shiftLoading } = useShiftDetection();
   
-  useLiveDataPolling(config.pollingInterval);
+  // useLiveDataPolling(config.pollingInterval);
 
   // Garantir view válida na inicialização
   useEffect(() => {
-    if (!view || ![ViewState.DASHBOARD, ViewState.OEE, ViewState.STOP_REASON].includes(view)) {
+    console.log('🔄 DashboardPage: Verificando view válida:', view);
+    if (!view || ![ViewState.DASHBOARD, ViewState.OEE, ViewState.STOP_REASON, ViewState.PAUSE_REASON].includes(view)) {
+      console.log('⚠️ DashboardPage: View inválida, redirecionando para DASHBOARD');
       setView(ViewState.DASHBOARD);
     }
   }, []);
@@ -120,11 +123,15 @@ const DashboardPage: React.FC = () => {
   }
 
   const renderView = () => {
+    console.log('🔄 DashboardPage: renderView chamado com view:', view);
     switch (view) {
       case ViewState.DASHBOARD:
         return <DashboardView />;
       case ViewState.STOP_REASON:
         return <StopReasonModal />;
+      case ViewState.PAUSE_REASON:
+        console.log('🔄 DashboardPage: Renderizando PauseReasonModal');
+        return <PauseReasonModal />;
       case ViewState.SHIFT_MODAL:
         return <ShiftModal onClose={() => setView(ViewState.DASHBOARD)} />;
       default:
@@ -132,12 +139,13 @@ const DashboardPage: React.FC = () => {
     }
   };
 
-  // Se estiver na tela de STOP_REASON, renderizar apenas o modal com sidebar, sem header
-  if (view === ViewState.STOP_REASON) {
+  // Se estiver na tela de STOP_REASON ou PAUSE_REASON, renderizar apenas o modal com sidebar, sem header
+  if (view === ViewState.STOP_REASON || view === ViewState.PAUSE_REASON) {
+    console.log('🔄 DashboardPage: Renderizando modal especial para view:', view);
     return (
       <div className="bg-background min-h-screen">
         <Sidebar />
-        <StopReasonModal />
+        {view === ViewState.STOP_REASON ? <StopReasonModal /> : <PauseReasonModal />}
       </div>
     );
   }

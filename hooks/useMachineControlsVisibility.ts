@@ -9,8 +9,8 @@ export const useMachineControlsVisibility = () => {
     return true;
   }
   
-  // Mostrar em STOP_REASON se não estiver carregando
-  if (view === ViewState.STOP_REASON && !isLoading) {
+  // Mostrar em STOP_REASON ou PAUSE_REASON se não estiver carregando
+  if ((view === ViewState.STOP_REASON || view === ViewState.PAUSE_REASON) && !isLoading) {
     return true;
   }
   

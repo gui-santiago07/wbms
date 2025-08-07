@@ -1,7 +1,19 @@
 import Option7ApiService from './option7ApiService';
 
-// Tipos para os dados da timeline
+// Tipos para os dados da timeline (nova estrutura da API)
 export interface TimelineData {
+  success: boolean;
+  timestamp: any[];
+  period: {
+    start: string;
+    end: string;
+  };
+  data: {
+    [lineName: string]: LineTimelineData;
+  };
+}
+
+export interface LineTimelineData {
   events: TimelineEvent[];
   products: TimelineProduct[];
   shifts: TimelineShift[];
@@ -9,48 +21,74 @@ export interface TimelineData {
 }
 
 export interface TimelineEvent {
-  id: string;
-  start: string;
-  end: string;
-  status: 'Run' | 'Standby' | 'Down' | 'Setup';
-  description: string;
-  duration: number;
+  start_time: string;
+  end_time: string;
+  state_text: string;
+  events_name: string;
 }
 
 export interface TimelineProduct {
-  id: string;
-  start: string;
-  end: string;
-  productName: string;
-  quantity: number;
-  duration: number;
+  start_time: string;
+  end_time: string;
+  product_id: string;
+  ideal_production: number;
+  run_time: string;
+  total_time: string;
+  good_count: number;
+  reject_count: number;
+  total_count: number;
+  perfect_cycle_speed: number;
+  cycle_speed: number;
+  occurrences: number;
+  all_total_time: string;
+  down_time: string;
+  setup_time: string;
+  standby_time: string;
 }
 
 export interface TimelineShift {
-  id: string;
-  start: string;
-  end: string;
-  shiftName: string;
-  duration: number;
+  start_time: string;
+  end_time: string;
+  shift_id: string;
+  ideal_production: number;
+  run_time: string;
+  total_time: string;
+  good_count: number;
+  reject_count: number;
+  total_count: number;
+  perfect_cycle_speed: number;
+  cycle_speed: number;
+  occurrences: number;
+  all_total_time: string;
+  down_time: string;
+  setup_time: string;
+  standby_time: string;
 }
 
 export interface StatusStatistics {
   [key: string]: {
+    duration: number;
     occurrences: number;
-    totalTime: number;
-    minTime: number;
-    avgTime: number;
-    maxTime: number;
+    min: number;
+    max: number;
+    reasons?: {
+      [reason: string]: {
+        duration: number;
+        occurrences: number;
+        min: number;
+        max: number;
+      };
+    };
   };
 }
 
-// Tipos para filtros
+// Tipos para filtros (nova estrutura)
 export interface TimelineFilters {
-  startDate: string;
-  endDate: string;
-  plant: string;
-  sector: string;
-  lines: string[];
+  start_period: string;
+  end_period: string;
+  filtros: {
+    linhas: string[];
+  };
 }
 
 // Tipos para opções de filtro
@@ -66,6 +104,14 @@ export interface ShareTimelineData {
   filters: TimelineFilters;
 }
 
+// Tipos para dados de OEE calculados
+export interface OeeData {
+  oee: number;
+  availability: number;
+  performance: number;
+  quality: number;
+}
+
 class TimelineService {
   private apiService: Option7ApiService;
 
@@ -75,15 +121,26 @@ class TimelineService {
 
   /**
    * Buscar dados da timeline de produção
-   * POST /api/timeline
+   * POST /wbms/auto-apontamento/timeline
    */
   async getTimelineData(filters: TimelineFilters): Promise<TimelineData> {
     try {
+      console.log('🔄 TimelineService: Buscando dados reais da timeline com filtros:', filters);
       
-      // Simular chamada da API real
-      // TODO: Implementar chamada real para POST /api/timeline
-      const response = await this.simulateApiCall(filters);
+      // Chamada real para POST /wbms/auto-apontamento/timeline
+      const response = await this.apiService.post<TimelineData>('/wbms/auto-apontamento/timeline', filters);
       
+      if (!response || !response.success) {
+        console.warn('⚠️ TimelineService: Resposta vazia ou inválida da API de timeline');
+        return {
+          success: false,
+          timestamp: [],
+          period: { start: '', end: '' },
+          data: {}
+        };
+      }
+      
+      console.log('✅ TimelineService: Dados da timeline carregados com sucesso');
       return response;
     } catch (error) {
       console.error('❌ TimelineService: Erro ao buscar dados da timeline:', error);
@@ -92,11 +149,70 @@ class TimelineService {
   }
 
   /**
+   * Calcular dados de OEE baseados nos dados da timeline
+   */
+  calculateOeeData(timelineData: TimelineData): OeeData {
+    if (!timelineData.success || !timelineData.data) {
+      return { oee: 0, availability: 0, performance: 0, quality: 0 };
+    }
+
+    let totalRunTime = 0;
+    let totalDownTime = 0;
+    let totalSetupTime = 0;
+    let totalStandbyTime = 0;
+    let totalGoodCount = 0;
+    let totalIdealProduction = 0;
+    let totalActualProduction = 0;
+
+    // Calcular totais de todas as linhas
+    Object.values(timelineData.data).forEach(lineData => {
+      if (lineData.status) {
+        // Tempos
+        if (lineData.status.Run) {
+          totalRunTime += lineData.status.Run.duration;
+        }
+        if (lineData.status.Down) {
+          totalDownTime += lineData.status.Down.duration;
+        }
+        if (lineData.status.Setup) {
+          totalSetupTime += lineData.status.Setup.duration;
+        }
+        if (lineData.status.Standby) {
+          totalStandbyTime += lineData.status.Standby.duration;
+        }
+      }
+
+      // Produção
+      lineData.products?.forEach(product => {
+        totalGoodCount += product.good_count;
+        totalIdealProduction += product.ideal_production;
+        totalActualProduction += product.total_count;
+      });
+    });
+
+    const totalTime = totalRunTime + totalDownTime + totalSetupTime + totalStandbyTime;
+    
+    // Calcular métricas OEE
+    const availability = totalTime > 0 ? (totalRunTime / totalTime) * 100 : 0;
+    const performance = totalIdealProduction > 0 ? (totalActualProduction / totalIdealProduction) * 100 : 0;
+    const quality = totalActualProduction > 0 ? (totalGoodCount / totalActualProduction) * 100 : 0;
+    const oee = (availability * performance * quality) / 10000; // Dividir por 10000 porque as métricas já estão em porcentagem
+
+    return {
+      oee: Math.round(oee * 100) / 100, // Arredondar para 2 casas decimais
+      availability: Math.round(availability * 100) / 100,
+      performance: Math.round(performance * 100) / 100,
+      quality: Math.round(quality * 100) / 100
+    };
+  }
+
+  /**
    * Carregar opções de plantas
-   * GET /api/factories
+   * GET /factories
    */
   async getPlants(): Promise<FilterOption[]> {
     try {
+      console.log('🔄 TimelineService: Carregando plantas...');
       
       // Usar API real existente
       const response = await this.apiService.getFactories();
@@ -111,6 +227,7 @@ class TimelineService {
         name: factory.name || factory.plant_name || ''
       })).filter(plant => plant.id && plant.name);
       
+      console.log('✅ TimelineService: Plantas carregadas:', plants.length);
       return plants;
     } catch (error) {
       console.error('❌ TimelineService: Erro ao buscar plantas:', error);
@@ -121,10 +238,11 @@ class TimelineService {
 
   /**
    * Carregar setores por planta
-   * GET /api/sectors
+   * GET /sectors
    */
   async getSectors(plantId: string): Promise<FilterOption[]> {
     try {
+      console.log('🔄 TimelineService: Carregando setores para planta:', plantId);
       
       // Converter string para number para compatibilidade com a API
       const plantIdNumber = parseInt(plantId);
@@ -142,6 +260,7 @@ class TimelineService {
         name: sector.name || sector.sector || ''
       })).filter(sector => sector.id && sector.name);
       
+      console.log('✅ TimelineService: Setores carregados:', sectors.length);
       return sectors;
     } catch (error) {
       console.error('❌ TimelineService: Erro ao buscar setores:', error);
@@ -152,10 +271,11 @@ class TimelineService {
 
   /**
    * Carregar linhas por setor
-   * GET /api/lines
+   * GET /lines
    */
   async getLines(sectorId: string): Promise<FilterOption[]> {
     try {
+      console.log('🔄 TimelineService: Carregando linhas para setor:', sectorId);
       
       // Converter string para number para compatibilidade com a API
       const sectorIdNumber = parseInt(sectorId);
@@ -173,6 +293,7 @@ class TimelineService {
         name: line.line || line.name || ''
       })).filter(line => line.id && line.name);
       
+      console.log('✅ TimelineService: Linhas carregadas:', lines.length);
       return lines;
     } catch (error) {
       console.error('❌ TimelineService: Erro ao buscar linhas:', error);
@@ -183,119 +304,20 @@ class TimelineService {
 
   /**
    * Compartilhar timeline por e-mail
-   * POST /api/timeline/sendTimeline
+   * POST /timeline/sendTimeline
    */
   async shareTimeline(data: ShareTimelineData): Promise<void> {
     try {
+      console.log('🔄 TimelineService: Compartilhando timeline para:', data.email);
       
-      // TODO: Implementar chamada real para POST /api/timeline/sendTimeline
-      await this.simulateShareCall(data);
+      // Chamada real para POST /timeline/sendTimeline
+      await this.apiService.post('/timeline/sendTimeline', data);
       
+      console.log('✅ TimelineService: Timeline compartilhada com sucesso');
     } catch (error) {
       console.error('❌ TimelineService: Erro ao compartilhar timeline:', error);
       throw new Error('Erro ao compartilhar timeline');
     }
-  }
-
-  // Método temporário para simular dados da timeline até implementar API real
-  private async simulateApiCall(filters: TimelineFilters): Promise<TimelineData> {
-    // Simular delay da API
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    // Dados mockados baseados na imagem de referência (02-03 Aug)
-    const baseDate = new Date('2024-08-02T00:00:00');
-    
-    return {
-      events: [
-        // Eventos do dia 02/08
-        { id: '1', start: '2024-08-02T06:00:00', end: '2024-08-02T08:00:00', status: 'Run', description: 'Produção Normal', duration: 7200 },
-        { id: '2', start: '2024-08-02T08:00:00', end: '2024-08-02T08:30:00', status: 'Setup', description: 'Setup Inicial', duration: 1800 },
-        { id: '3', start: '2024-08-02T08:30:00', end: '2024-08-02T10:00:00', status: 'Run', description: 'Produção Normal', duration: 5400 },
-        { id: '4', start: '2024-08-02T10:00:00', end: '2024-08-02T11:00:00', status: 'Down', description: 'Manutenção', duration: 3600 },
-        { id: '5', start: '2024-08-02T11:00:00', end: '2024-08-02T12:00:00', status: 'Standby', description: 'Aguardando', duration: 3600 },
-        { id: '6', start: '2024-08-02T12:00:00', end: '2024-08-02T14:00:00', status: 'Run', description: 'Produção Normal', duration: 7200 },
-        { id: '7', start: '2024-08-02T14:00:00', end: '2024-08-02T15:00:00', status: 'Setup', description: 'Troca Produto', duration: 3600 },
-        { id: '8', start: '2024-08-02T15:00:00', end: '2024-08-02T16:00:00', status: 'Run', description: 'Produção Normal', duration: 3600 },
-        { id: '9', start: '2024-08-02T16:00:00', end: '2024-08-02T18:00:00', status: 'Down', description: 'Parada Técnica', duration: 7200 },
-        { id: '10', start: '2024-08-02T18:00:00', end: '2024-08-02T20:00:00', status: 'Run', description: 'Produção Normal', duration: 7200 },
-        { id: '11', start: '2024-08-02T20:00:00', end: '2024-08-02T22:00:00', status: 'Standby', description: 'Aguardando', duration: 7200 },
-        { id: '12', start: '2024-08-02T22:00:00', end: '2024-08-03T00:00:00', status: 'Run', description: 'Produção Normal', duration: 7200 },
-        
-        // Eventos do dia 03/08
-        { id: '13', start: '2024-08-03T00:00:00', end: '2024-08-03T02:00:00', status: 'Down', description: 'Manutenção', duration: 7200 },
-        { id: '14', start: '2024-08-03T02:00:00', end: '2024-08-03T04:00:00', status: 'Run', description: 'Produção Normal', duration: 7200 },
-        { id: '15', start: '2024-08-03T04:00:00', end: '2024-08-03T06:00:00', status: 'Setup', description: 'Setup Final', duration: 7200 },
-        { id: '16', start: '2024-08-03T06:00:00', end: '2024-08-03T08:00:00', status: 'Run', description: 'Produção Normal', duration: 7200 },
-        { id: '17', start: '2024-08-03T08:00:00', end: '2024-08-03T10:00:00', status: 'Standby', description: 'Aguardando', duration: 7200 },
-        { id: '18', start: '2024-08-03T10:00:00', end: '2024-08-03T12:00:00', status: 'Run', description: 'Produção Normal', duration: 7200 },
-        { id: '19', start: '2024-08-03T12:00:00', end: '2024-08-03T14:00:00', status: 'Down', description: 'Parada Técnica', duration: 7200 },
-        { id: '20', start: '2024-08-03T14:00:00', end: '2024-08-03T16:00:00', status: 'Run', description: 'Produção Normal', duration: 7200 },
-        { id: '21', start: '2024-08-03T16:00:00', end: '2024-08-03T18:00:00', status: 'Setup', description: 'Troca Produto', duration: 7200 },
-        { id: '22', start: '2024-08-03T18:00:00', end: '2024-08-03T20:00:00', status: 'Run', description: 'Produção Normal', duration: 7200 },
-        { id: '23', start: '2024-08-03T20:00:00', end: '2024-08-03T22:00:00', status: 'Standby', description: 'Aguardando', duration: 7200 },
-        { id: '24', start: '2024-08-03T22:00:00', end: '2024-08-03T23:59:59', status: 'Run', description: 'Produção Normal', duration: 7199 }
-      ],
-      products: [
-        // Produtos do dia 02/08
-        { id: '1', start: '2024-08-02T06:00:00', end: '2024-08-02T10:00:00', productName: 'FQF 2100068', quantity: 150, duration: 14400 },
-        { id: '2', start: '2024-08-02T10:30:00', end: '2024-08-02T14:00:00', productName: 'Anti FL 2100036', quantity: 200, duration: 12600 },
-        { id: '3', start: '2024-08-02T15:00:00', end: '2024-08-02T18:00:00', productName: 'Anti FL 2100036', quantity: 180, duration: 10800 },
-        { id: '4', start: '2024-08-02T20:00:00', end: '2024-08-02T22:00:00', productName: 'Anti. M 2100280', quantity: 120, duration: 7200 },
-        { id: '5', start: '2024-08-02T22:00:00', end: '2024-08-03T02:00:00', productName: 'Anti. M 2100280', quantity: 160, duration: 14400 },
-        
-        // Produtos do dia 03/08
-        { id: '6', start: '2024-08-03T02:00:00', end: '2024-08-03T06:00:00', productName: 'Anti FL 2100036', quantity: 220, duration: 14400 },
-        { id: '7', start: '2024-08-03T08:00:00', end: '2024-08-03T12:00:00', productName: 'FQF 2100068', quantity: 140, duration: 14400 },
-        { id: '8', start: '2024-08-03T14:00:00', end: '2024-08-03T18:00:00', productName: 'Anti. M 2100280', quantity: 190, duration: 14400 },
-        { id: '9', start: '2024-08-03T20:00:00', end: '2024-08-03T23:59:59', productName: 'Anti FL 2100036', quantity: 170, duration: 14399 }
-      ],
-      shifts: [
-        // Turnos do dia 02/08
-        { id: '1', start: '2024-08-02T06:00:00', end: '2024-08-02T14:00:00', shiftName: 'Turno 1', duration: 28800 },
-        { id: '2', start: '2024-08-02T14:00:00', end: '2024-08-02T22:00:00', shiftName: 'Turno 2', duration: 28800 },
-        { id: '3', start: '2024-08-02T22:00:00', end: '2024-08-03T06:00:00', shiftName: 'Turno 3', duration: 28800 },
-        
-        // Turnos do dia 03/08
-        { id: '4', start: '2024-08-03T06:00:00', end: '2024-08-03T14:00:00', shiftName: 'Turno 1', duration: 28800 },
-        { id: '5', start: '2024-08-03T14:00:00', end: '2024-08-03T22:00:00', shiftName: 'Turno 2', duration: 28800 },
-        { id: '6', start: '2024-08-03T22:00:00', end: '2024-08-03T23:59:59', shiftName: 'Turno 3', duration: 7199 }
-      ],
-      status: {
-        'Run': {
-          occurrences: 12,
-          totalTime: 86400,
-          minTime: 3600,
-          avgTime: 7200,
-          maxTime: 7200
-        },
-        'Setup': {
-          occurrences: 4,
-          totalTime: 19800,
-          minTime: 1800,
-          avgTime: 4950,
-          maxTime: 7200
-        },
-        'Down': {
-          occurrences: 4,
-          totalTime: 28800,
-          minTime: 3600,
-          avgTime: 7200,
-          maxTime: 7200
-        },
-        'Standby': {
-          occurrences: 4,
-          totalTime: 28800,
-          minTime: 3600,
-          avgTime: 7200,
-          maxTime: 7200
-        }
-      }
-    };
-  }
-
-  private async simulateShareCall(data: ShareTimelineData): Promise<void> {
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
   }
 
   // Utilitários

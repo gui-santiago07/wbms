@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { useProductionStore } from '../store/useProductionStore';
 import { useDeviceSettingsStore } from '../store/useDeviceSettingsStore';
+import { useProductionStore } from '../store/useProductionStore';
 import Option7ApiService from '../services/option7ApiService';
 import { Shift } from '../types';
+import { pollingManager } from '../services/api';
 
 interface ShiftData {
   id: string;
@@ -16,22 +17,24 @@ interface ShiftData {
 export const useShiftDetection = () => {
   const [currentShift, setCurrentShift] = useState<ShiftData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<string | null>(null);
   
-  const { deviceSettings } = useDeviceSettingsStore();
-  const { setCurrentShift: setStoreShift } = useProductionStore();
+  const deviceSettings = useDeviceSettingsStore((state) => state.deviceSettings);
+  const setStoreShift = useProductionStore((state) => state.setCurrentShift);
   const apiService = new Option7ApiService();
 
   const detectCurrentShift = async () => {
     if (!deviceSettings.isConfigured) {
+      console.log('⏸️ useShiftDetection: Dispositivo não configurado');
       return;
     }
 
-    try {
-      setIsLoading(true);
-      setError('');
+    setIsLoading(true);
+    setError(null);
 
-      // ✅ CORRETO - Buscar turnos sem filtros
+    try {
+      console.log('🔄 useShiftDetection: Detectando turno atual...');
+      
       const workshifts = await apiService.getWorkshifts([], [], []);
 
       // Detectar turno atual baseado no horário
@@ -122,7 +125,13 @@ export const useShiftDetection = () => {
       detectCurrentShift();
     }, 60 * 60 * 1000); // Verificar a cada hora
 
-    return () => clearInterval(interval);
+    // Registrar intervalo no sistema centralizado
+    pollingManager.registerInterval(interval);
+
+    return () => {
+      clearInterval(interval);
+      pollingManager.unregisterInterval(interval);
+    };
   }, [deviceSettings.isConfigured]);
 
   return {

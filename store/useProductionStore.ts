@@ -91,11 +91,20 @@ interface ProductionState {
     goodPartsPercent: number;
   };
   
+  // Produto selecionado
+  selectedProduct: ProductSelection | null;
+  
   // Status do dispositivo
   deviceStatus: {
     status: string;
     assetId: string;
     deviceId: number;
+    isLoading: boolean;
+  };
+  
+  // Status de produção ativa da API
+  apiProductionStatus: {
+    hasActiveProduction: boolean;
     isLoading: boolean;
   };
   
@@ -132,6 +141,7 @@ interface ProductionState {
   fetchDowntimeHistory: () => Promise<void>;
   fetchDashboardComposite: () => Promise<void>;
   fetchStopReasons: () => Promise<void>;
+  fetchPauseReasons: () => Promise<void>;
   fetchTimelineData: () => Promise<void>;
   formatTime: (seconds: number) => string;
   loadAvailableProducts: () => Promise<void>;
@@ -147,10 +157,27 @@ interface ProductionState {
   setShowSetupModal: (show: boolean) => void;
   handleSetupComplete: (setupData: any) => void;
   loadProductionData: () => Promise<void>;
+  loadInitialProductionData: (clientLineKey: string) => Promise<void>;
   checkProductionStatus: () => Promise<void>;
   
+  // Métodos para produto selecionado
+  setSelectedProduct: (product: ProductSelection | null) => void;
+  setSetupData: (setupData: any) => void;
+  startProductionSetup: () => Promise<void>;
+  
   // Métodos para status do dispositivo
+  loadApiProductionStatus: (clientLineKey: string) => Promise<void>;
   loadDeviceStatus: (clientLineKey: string) => Promise<void>;
+  
+  // Métodos do sistema de cache inteligente
+  getCacheStats: () => { cacheSize: number; queueSize: number; isProcessing: boolean };
+  clearCache: () => void;
+  
+  // Novo método para registrar parada com auto-apontamento
+  registerStopReasonWithAutoApontamento: (reason: string, reasonId?: string) => Promise<void>;
+  
+  // Novo método para adicionar parada às principais paradas do dia
+  addToTopStopReasons: (reason: string, reasonId?: string) => void;
 }
 
 export const useProductionStore = create<ProductionState>()(
@@ -240,12 +267,21 @@ export const useProductionStore = create<ProductionState>()(
     goodPartsPercent: 100
   },
   
+  // Produto selecionado
+  selectedProduct: null,
+  
   // Status do dispositivo
   deviceStatus: {
     status: 'aguardando...',
     assetId: '',
     deviceId: 0,
     isLoading: true
+  },
+  
+  // Status de produção ativa da API
+  apiProductionStatus: {
+    hasActiveProduction: false,
+    isLoading: false
   },
 
     setMachineStatus: (status: MachineStatus) => {
@@ -297,18 +333,16 @@ export const useProductionStore = create<ProductionState>()(
   
   setView: (view: ViewState) => {
     const currentView = get().view;
-    //   from: currentView, 
-    //   to: view, 
-    //   timestamp: new Date().toISOString() 
-    // });
+    console.log('🔄 Store: setView chamado - de:', currentView, 'para:', view);
     
     // Garantir que sempre temos uma view válida
     if (!Object.values(ViewState).includes(view)) {
-      // console.warn('⚠️ View inválida detectada, usando DASHBOARD como fallback');
+      console.warn('⚠️ View inválida detectada, usando DASHBOARD como fallback');
       view = ViewState.DASHBOARD;
     }
     
     set({ view });
+    console.log('✅ Store: View alterada para:', view);
   },
 
   initializeDashboard: async () => {
@@ -346,110 +380,9 @@ export const useProductionStore = create<ProductionState>()(
   },
 
   fetchLiveData: async () => {
-    const { automaticProductionService, currentShift } = get();
-    const { deviceSettings } = useDeviceSettingsStore.getState();
-    
-    // Verificar se já está carregando para evitar chamadas duplicadas
-    const currentState = get();
-    if (currentState.isLoading) {
-      return;
-    }
-    
-    // Verificar turno silenciosamente se necessário
-    await get().checkShiftIfNeeded();
-    
-    // Obter turno atualizado após verificação
-    const updatedCurrentShift = get().currentShift;
-    
-    // Só fazer chamadas se há um turno atual e linha configurada
-    if (!updatedCurrentShift || !deviceSettings.isConfigured || !deviceSettings.lineId) {
-      return;
-    }
-    
-    try {
-      // Buscar dados de produção em tempo real do backend
-      const productionData = await automaticProductionService.getLiveProductionData(deviceSettings.lineId);
-      const liveMetrics = automaticProductionService.convertToLiveMetrics(productionData);
-      
-      // Determinar status da máquina baseado nos dados de produção
-      let machineStatus: MachineStatus = MachineStatus.RUNNING;
-      if (productionData) {
-        // Se há dados de produção e tempo de parada é maior que tempo de produção, máquina está parada
-        if (productionData.down_time > productionData.run_time) {
-          machineStatus = MachineStatus.DOWN;
-        } else if (productionData.run_time > 0) {
-          machineStatus = MachineStatus.RUNNING;
-        } else {
-          machineStatus = MachineStatus.STANDBY;
-        }
-      } else {
-        machineStatus = MachineStatus.STANDBY;
-      }
-      
-      console.log('🔄 Store: Dados de produção em tempo real:', {
-        productionData, 
-        liveMetrics, 
-        machineStatus 
-      });
-      
-      // Só atualizar o status da máquina se não há um evento de parada em andamento
-      const shouldUpdateMachineStatus = !currentState.currentDowntimeEventId || machineStatus !== MachineStatus.DOWN;
-      
-      console.log('🔄 Store: Atualização de status da máquina:', {
-        currentMachineStatus: currentState.machineStatus,
-        newMachineStatus: machineStatus,
-        hasDowntimeEvent: !!currentState.currentDowntimeEventId,
-        shouldUpdate: shouldUpdateMachineStatus
-      });
-      
-      set({ 
-        liveMetrics,
-        machineStatus: shouldUpdateMachineStatus ? machineStatus : currentState.machineStatus,
-        error: null
-      });
-
-      // Verificar se houve transição para parada (de status ativo para DOWN)
-      const updatedState = get();
-      const previousMachineStatus = currentState.machineStatus;
-      const isTransitionToDown = machineStatus === MachineStatus.DOWN && 
-        previousMachineStatus !== MachineStatus.DOWN && 
-        [MachineStatus.RUNNING, MachineStatus.PAUSED, MachineStatus.SETUP, MachineStatus.STANDBY].includes(previousMachineStatus);
-      
-      // Se a máquina parou E não estamos já na tela de parada E não há um evento de parada em andamento E houve transição
-      if (isTransitionToDown && updatedState.view !== ViewState.STOP_REASON && !updatedState.currentDowntimeEventId) {
-        console.log('🔄 Store: Transição para parada detectada:', {
-          previousStatus: previousMachineStatus,
-          newStatus: machineStatus
-        });
-        const currentView = updatedState.view;
-        const newEventId = `evt${Date.now()}`;
-        set({ 
-          previousView: currentView,
-          view: ViewState.STOP_REASON, 
-          currentDowntimeEventId: newEventId,
-          downtimeHistory: [
-            { 
-              id: newEventId, 
-              operator: 'Operador', 
-              startDate: new Date().toISOString().split('T')[0], 
-              startTime: new Date().toLocaleTimeString(), 
-              endDate: null, 
-              endTime: null, 
-              totalTime: null, 
-              reason: 'Aguardando motivo...' 
-            },
-            ...updatedState.downtimeHistory
-          ]
-        });
-      } else if (machineStatus === MachineStatus.DOWN && updatedState.currentDowntimeEventId) {
-      } else if (machineStatus === MachineStatus.DOWN && updatedState.view === ViewState.STOP_REASON) {
-      } else if (machineStatus === MachineStatus.DOWN && !isTransitionToDown) {
-      }
-    } catch (error) {
-      console.error('🔄 Store: Erro ao buscar dados em tempo real do backend (tratado silenciosamente):', error);
-      // Não definir erro no estado - tratamento silencioso
-      // Não fazer re-throw para evitar propagação de erro
-    }
+    // Função desabilitada para evitar chamadas ao automaticProductionService
+    console.log('🔄 Store: fetchLiveData desabilitada');
+    return;
   },
 
   registerEvent: async (eventType: 'DOWN' | 'SETUP' | 'PAUSE' | 'RUN' | 'ASSISTANCE_REQUEST') => {
@@ -636,27 +569,10 @@ export const useProductionStore = create<ProductionState>()(
   },
 
   fetchOeeHistory: async (period: string = '1h') => {
-    const { automaticProductionService } = get();
-    const { deviceSettings } = useDeviceSettingsStore.getState();
-    
-    console.log('🔄 Store: Buscando histórico OEE:', {
-      period, 
-      lineId: deviceSettings.lineId 
-    });
-    
-    try {
-      if (!deviceSettings.isConfigured || !deviceSettings.lineId) {
-        set({ oeeHistory: null });
-        return;
-      }
-      
-      const historyData = await automaticProductionService.getOeeHistory(deviceSettings.lineId, period);
-      set({ oeeHistory: historyData });
-    } catch (error) {
-      console.error('❌ Store: Erro ao buscar histórico OEE do backend:', error);
-      // Em caso de erro, definir dados vazios
-      set({ oeeHistory: null });
-    }
+    // Função desabilitada para evitar chamadas ao automaticProductionService
+    console.log('🔄 Store: fetchOeeHistory desabilitada');
+    set({ oeeHistory: null });
+    return;
   },
 
   // Novos métodos WBMS
@@ -1129,6 +1045,93 @@ export const useProductionStore = create<ProductionState>()(
     }
   },
 
+  fetchPauseReasons: async () => {
+    const { option7ApiService } = get();
+    set({ isLoading: true, error: null });
+    
+    try {
+      const eventReasons = await option7ApiService.getEventReasons('standby');
+      
+      // Converter para o formato esperado pelo frontend
+      const categories = new Map<string, DowntimeReasonCategory>();
+      
+      eventReasons.forEach((reason: any) => {
+        // Extrair categoria baseada no prefixo do motivo
+        let category = 'Outros';
+        
+        if (reason.motivo.startsWith('Aguardando') || reason.motivo.includes('Aguardando')) {
+          category = 'Aguardando';
+        } else if (reason.motivo.startsWith('Intervalo') || reason.motivo.includes('Intervalo')) {
+          category = 'Intervalo';
+        } else if (reason.motivo.startsWith('Pausa') || reason.motivo.includes('Pausa')) {
+          category = 'Pausas';
+        } else if (reason.motivo.startsWith('Almoço') || reason.motivo.includes('Almoço')) {
+          category = 'Refeições';
+        } else if (reason.motivo.startsWith('Café') || reason.motivo.includes('Café')) {
+          category = 'Refeições';
+        } else if (reason.motivo.startsWith('Banheiro') || reason.motivo.includes('Banheiro')) {
+          category = 'Pessoal';
+        } else if (reason.motivo.startsWith('Reunião') || reason.motivo.includes('Reunião')) {
+          category = 'Reuniões';
+        } else if (reason.motivo.startsWith('Treinamento') || reason.motivo.includes('Treinamento')) {
+          category = 'Treinamento';
+        } else if (reason.motivo.startsWith('Operacional') || reason.motivo.includes('Operacional')) {
+          category = 'Operacional';
+        } else if (reason.motivo.includes('Espera') || reason.motivo.includes('Aguardar')) {
+          category = 'Aguardando';
+        } else if (reason.motivo.includes('Standby') || reason.motivo.includes('Stand-by')) {
+          category = 'Standby';
+        }
+        
+        if (!categories.has(category)) {
+          categories.set(category, {
+            category,
+            reasons: []
+          });
+        }
+        
+        categories.get(category)!.reasons.push({
+          id: reason.descricao_parada_key.toString(),
+          code: reason.descricao_parada_key.toString(),
+          description: reason.motivo
+        });
+      });
+      
+      // Ordenar categorias por relevância para pausas
+      const categoryOrder = [
+        'Aguardando',
+        'Intervalo',
+        'Pausas',
+        'Refeições',
+        'Pessoal',
+        'Reuniões',
+        'Treinamento',
+        'Operacional',
+        'Standby',
+        'Outros'
+      ];
+      
+      const sortedCategories = Array.from(categories.values()).sort((a, b) => {
+        const aIndex = categoryOrder.indexOf(a.category);
+        const bIndex = categoryOrder.indexOf(b.category);
+        return aIndex - bIndex;
+      });
+      
+      const downtimeReasons = sortedCategories;
+      
+      set({ 
+        downtimeReasons,
+        isLoading: false,
+        error: null
+      });
+      
+    } catch (error) {
+      // console.error('❌ Store: Erro ao buscar motivos de pausa (tratado silenciosamente):', error);
+      // Não definir erro no estado - tratamento silencioso
+      set({ isLoading: false });
+    }
+  },
+
   fetchTimelineData: async () => {
     const { timesheetService } = get();
     const { deviceSettings } = useDeviceSettingsStore.getState();
@@ -1176,54 +1179,10 @@ export const useProductionStore = create<ProductionState>()(
 
   // Novo método para carregar Production Details
   loadProductionDetails: async (shiftId?: string) => {
-    const { automaticProductionService } = get();
-    const { deviceSettings } = useDeviceSettingsStore.getState();
-    
-    
-    try {
-      if (!deviceSettings.isConfigured || !deviceSettings.lineId) {
-        set({ productionDetails: null });
-        return;
-      }
-
-      // Buscar dados de produção ativa do backend
-      const productionData = await automaticProductionService.getLiveProductionData(deviceSettings.lineId);
-      
-      if (productionData) {
-        // Mapear dados do backend para o formato esperado pelo frontend
-        const productionDetails = {
-          turno: productionData.shift_id || 'Turno Ativo',
-          ordemProducao: `OP-${productionData.id}`,
-          quantidadeOP: productionData.total_count,
-          productCode: productionData.id, // Usar ID como código do produto
-          productId: productionData.shift_id, // Usar shift_id como ID do produto
-          operator: 'Operador', // Valor padrão - backend não fornece
-          line: deviceSettings.lineId,
-          shiftTarget: 1000 // Meta padrão - backend não fornece
-        };
-        
-        set({ productionDetails });
-      } else {
-        // Se não há dados de produção ativa, criar dados padrão
-      const productionDetails = {
-          turno: 'Turno Ativo',
-          ordemProducao: 'N/A',
-          quantidadeOP: 0,
-          productCode: 'N/A',
-          productId: 'N/A',
-          operator: 'Operador',
-          line: deviceSettings.lineId,
-          shiftTarget: 1000
-      };
-      
-      set({ productionDetails });
-      }
-      
-    } catch (error) {
-      console.error('❌ Store: Erro ao carregar Production Details do backend (tratado silenciosamente):', error);
-      // Não definir erro no estado - tratamento silencioso
-      set({ productionDetails: null });
-    }
+    // Função desabilitada para evitar chamadas ao automaticProductionService
+    console.log('🔄 Store: loadProductionDetails desabilitada');
+    set({ productionDetails: null });
+    return;
   },
 
   // Métodos para controle de verificação de turno
@@ -1303,18 +1262,53 @@ export const useProductionStore = create<ProductionState>()(
   },
 
   loadProductionData: async () => {
-    const { setupData } = get();
+    const { setupData, selectedProduct } = get();
     
     if (!setupData?.line) {
       return;
     }
 
     try {
-      const productionData = await AutoApontamentoService.getProductionData(setupData.line);
+      // Passar o ID do produto selecionado se disponível
+      const productId = selectedProduct?.product_key?.toString();
+      const productionData = await AutoApontamentoService.getProductionData(setupData.line, productId);
       
       set({ productionData });
     } catch (error) {
       console.error('❌ Erro ao carregar dados de produção:', error);
+    }
+  },
+
+  // Novo método para carregar dados imediatamente após seleção da linha
+  loadInitialProductionData: async (clientLineKey: string) => {
+    const { selectedProduct } = get();
+    
+    try {
+      // Passar o ID do produto selecionado se disponível
+      const productId = selectedProduct?.product_key?.toString();
+      
+      // Carregar dados de produção
+      const productionData = await AutoApontamentoService.getProductionData(clientLineKey, productId);
+      
+      // Carregar status do dispositivo
+      const deviceStatus = await AutoApontamentoService.getDeviceStatus(clientLineKey);
+      
+      // Carregar status de produção da API
+      const apiStatus = await AutoApontamentoService.getLineStatus(clientLineKey);
+      
+      set({ 
+        productionData,
+        deviceStatus: {
+          ...deviceStatus,
+          isLoading: false
+        },
+        apiProductionStatus: {
+          hasActiveProduction: apiStatus.has_active_production,
+          isLoading: false
+        }
+      });
+    } catch (error) {
+      console.error('❌ Erro ao carregar dados iniciais de produção:', error);
     }
   },
 
@@ -1352,6 +1346,35 @@ export const useProductionStore = create<ProductionState>()(
   },
 
   // Métodos para status do dispositivo
+  loadApiProductionStatus: async (clientLineKey: string) => {
+    set(state => ({ 
+      apiProductionStatus: { 
+        ...state.apiProductionStatus, 
+        isLoading: true 
+      } 
+    }));
+
+    try {
+      const status = await AutoApontamentoService.getLineStatus(clientLineKey);
+      
+      set({ 
+        apiProductionStatus: {
+          hasActiveProduction: status.has_active_production,
+          isLoading: false
+        }
+      });
+      
+    } catch (error) {
+      console.error('❌ Erro ao carregar status de produção da API:', error);
+      set({ 
+        apiProductionStatus: {
+          hasActiveProduction: false,
+          isLoading: false
+        }
+      });
+    }
+  },
+
   loadDeviceStatus: async (clientLineKey: string) => {
     set(state => ({ 
       deviceStatus: { 
@@ -1361,41 +1384,163 @@ export const useProductionStore = create<ProductionState>()(
     }));
 
     try {
-      const lineData = await AutoApontamentoService.getLineData(clientLineKey);
+      const deviceStatus = await AutoApontamentoService.getDeviceStatus(clientLineKey);
       
-      if (lineData.success && lineData.data) {
-        const { device } = lineData.data;
-        
-        set({ 
-          deviceStatus: {
-            status: device.status,
-            assetId: device.asset_id,
-            deviceId: device.device_id,
-            isLoading: false
-          }
-        });
-        
-      } else {
-        set({ 
-          deviceStatus: {
-            status: 'aguardando...',
-            assetId: '',
-            deviceId: 0,
-            isLoading: false
-          }
-        });
-      }
+      set({ 
+        deviceStatus: {
+          ...deviceStatus,
+          isLoading: false
+        }
+      });
+      
     } catch (error) {
       console.error('❌ Erro ao carregar status do dispositivo:', error);
       set({ 
         deviceStatus: {
-          status: 'aguardando...',
+          status: 'stopped',
           assetId: '',
           deviceId: 0,
           isLoading: false
         }
       });
     }
+  },
+
+  // Métodos para produto selecionado
+  setSelectedProduct: (product: ProductSelection | null) => {
+    set({ selectedProduct: product });
+  },
+
+  setSetupData: (setupData: any) => {
+    set({ setupData });
+  },
+
+  startProductionSetup: async () => {
+    const { selectedProduct, setupData } = get();
+    
+    if (!selectedProduct || !setupData?.line) {
+      throw new Error('Produto ou linha não selecionados');
+    }
+
+    try {
+      // Iniciar produção usando a API
+      await AutoApontamentoService.startProduction(
+        setupData.line,
+        selectedProduct.id
+      );
+
+      // Atualizar setupData com o produto selecionado
+      const updatedSetupData = {
+        ...setupData,
+        product: selectedProduct.description || selectedProduct.name,
+        productKey: selectedProduct.id
+      };
+
+      set({ 
+        setupData: updatedSetupData,
+        showSetupModal: false
+      });
+
+      // Salvar no localStorage
+      localStorage.setItem('setup_data', JSON.stringify(updatedSetupData));
+      
+    } catch (error) {
+      console.error('❌ Erro ao iniciar setup de produção:', error);
+      throw error;
+    }
+  },
+
+  // Métodos do sistema de cache inteligente
+  getCacheStats: () => {
+    // Importar dados do hook useTimelineData
+    const { getCacheStats } = require('../hooks/useTimelineData');
+    return getCacheStats ? getCacheStats() : { cacheSize: 0, queueSize: 0, isProcessing: false };
+  },
+
+  clearCache: () => {
+    // Importar função do hook useTimelineData
+    const { clearCache } = require('../hooks/useTimelineData');
+    if (clearCache) {
+      clearCache();
+    }
+  },
+
+  // Novo método para registrar parada com auto-apontamento
+  registerStopReasonWithAutoApontamento: async (reason: string, reasonId?: string) => {
+    // Importar o store de configurações do dispositivo
+    const { useDeviceSettingsStore } = await import('./useDeviceSettingsStore');
+    const deviceSettings = useDeviceSettingsStore.getState().deviceSettings;
+    
+    if (!deviceSettings.lineId) {
+      console.error('❌ client_line_key não configurado');
+      throw new Error('Linha de produção não configurada');
+    }
+
+    try {
+      // Enviar requisição para o endpoint de auto-apontamento
+      const response = await AutoApontamentoService.stopProductionWithReason(
+        deviceSettings.lineId,
+        reason,
+        reasonId
+      );
+      
+      console.log('✅ Parada registrada com sucesso na API:', response);
+      
+      // Não atualizar o histórico aqui, pois já foi atualizado no modal
+      // O histórico é gerenciado localmente para fluidez
+      
+    } catch (error) {
+      console.error('❌ Erro ao registrar parada com auto-apontamento:', error);
+      throw error;
+    }
+  },
+
+  // Novo método para adicionar parada às principais paradas do dia
+  addToTopStopReasons: (reason: string, reasonId?: string) => {
+    set(state => {
+      const existingReason = state.topStopReasons.find(r => 
+        r.description === reason || r.id === reasonId
+      );
+
+      if (existingReason) {
+        // Se já existe, incrementar ocorrências e tempo
+        const updatedReasons = state.topStopReasons.map(r => {
+          if (r.description === reason || r.id === reasonId) {
+            const currentOccurrences = r.occurrences + 1;
+            // Simular incremento de tempo (1 minuto por ocorrência)
+            const currentTimeInSeconds = r.totalTime.split(':').reduce((acc, time) => acc * 60 + parseInt(time), 0);
+            const newTimeInSeconds = currentTimeInSeconds + 60; // +1 minuto
+            const hours = Math.floor(newTimeInSeconds / 3600);
+            const minutes = Math.floor((newTimeInSeconds % 3600) / 60);
+            const seconds = newTimeInSeconds % 60;
+            const newTotalTime = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            
+            return {
+              ...r,
+              occurrences: currentOccurrences,
+              totalTime: newTotalTime
+            };
+          }
+          return r;
+        });
+        
+        return { topStopReasons: updatedReasons };
+      } else {
+        // Se não existe, adicionar nova entrada
+        const newStopReason = {
+          id: reasonId || Date.now().toString(),
+          code: reasonId ? `ID-${reasonId}` : 'NOVO',
+          description: reason,
+          category: 'Parada',
+          totalTime: '00:01:00', // 1 minuto inicial
+          occurrences: 1
+        };
+        
+        return { 
+          topStopReasons: [newStopReason, ...state.topStopReasons]
+        };
+      }
+    });
   },
     }),
     {

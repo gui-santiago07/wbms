@@ -19,14 +19,41 @@ export const useProductionStatusCheck = (): ProductionStatusCheckResult => {
     error: null
   });
 
-  const { loadDeviceStatus } = useProductionStore();
+  const { 
+    loadDeviceStatus, 
+    loadApiProductionStatus, 
+    setSelectedProduct,
+    setSetupData
+  } = useProductionStore();
 
   useEffect(() => {
     const checkStatus = async () => {
       setResult(prev => ({ ...prev, isLoading: true, error: null }));
 
       try {
-        // 1. Buscar todas as linhas disponíveis
+        // 1. Carregar produto selecionado do cache
+        const cachedProduct = localStorage.getItem('selected_product');
+        if (cachedProduct) {
+          try {
+            const product = JSON.parse(cachedProduct);
+            setSelectedProduct(product);
+          } catch (error) {
+            console.warn('⚠️ Erro ao carregar produto do cache:', error);
+          }
+        }
+
+        // 2. Carregar setupData do cache
+        const cachedSetupData = localStorage.getItem('setup_data');
+        if (cachedSetupData) {
+          try {
+            const setupData = JSON.parse(cachedSetupData);
+            setSetupData(setupData);
+          } catch (error) {
+            console.warn('⚠️ Erro ao carregar setupData do cache:', error);
+          }
+        }
+
+        // 3. Buscar todas as linhas disponíveis
         const allDevices = await AutoApontamentoService.getAllDevices();
         
         if (!allDevices.success || allDevices.devices.length === 0) {
@@ -40,16 +67,17 @@ export const useProductionStatusCheck = (): ProductionStatusCheckResult => {
           return;
         }
 
-        // 2. Se há apenas uma linha, usar ela diretamente
+        // 4. Se há apenas uma linha, usar ela diretamente
         if (allDevices.devices.length === 1) {
           const device = allDevices.devices[0];
           const clientLineKey = device.line.client_line_key;
           
-          // 3. Verificar status da linha
+          // 5. Verificar status da linha
           const status = await AutoApontamentoService.getLineStatus(clientLineKey);
           
-          // 4. Carregar status do dispositivo
+          // 6. Carregar status do dispositivo e da API
           await loadDeviceStatus(clientLineKey);
+          await loadApiProductionStatus(clientLineKey);
           
           setResult({
             needsSetup: status.needs_setup,
@@ -61,15 +89,16 @@ export const useProductionStatusCheck = (): ProductionStatusCheckResult => {
           return;
         }
 
-        // 5. Se há múltiplas linhas, precisamos de seleção
+        // 7. Se há múltiplas linhas, precisamos de seleção
         // Por enquanto, usar a primeira linha como padrão
         const device = allDevices.devices[0];
         const clientLineKey = device.line.client_line_key;
         
         const status = await AutoApontamentoService.getLineStatus(clientLineKey);
         
-        // 6. Carregar status do dispositivo
+        // 8. Carregar status do dispositivo e da API
         await loadDeviceStatus(clientLineKey);
+        await loadApiProductionStatus(clientLineKey);
         
         setResult({
           needsSetup: status.needs_setup,
@@ -92,7 +121,7 @@ export const useProductionStatusCheck = (): ProductionStatusCheckResult => {
     };
 
     checkStatus();
-  }, [loadDeviceStatus]);
+  }, [loadDeviceStatus, loadApiProductionStatus, setSelectedProduct, setSetupData]);
 
   return result;
 }; 
