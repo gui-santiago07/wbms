@@ -31,13 +31,35 @@ const ControlButton: React.FC<ControlButtonProps> = ({ label, icon, onClick, col
 
 const MachineControls: React.FC<MachineControlsProps> = ({ isFixed = false }) => {
   const { setMachineStatus, startSetup, setView, machineStatus, registerEvent } = useProductionStore();
+  
   const setPaused = () => {
     setView(ViewState.PAUSE_REASON);
     setMachineStatus(MachineStatus.PAUSED);
   };
+  
   const setDown = async () => {
-    await registerEvent('DOWN');
-    setMachineStatus(MachineStatus.DOWN);
+    try {
+      // Primeiro, definir o status da máquina imediatamente para feedback visual
+      setMachineStatus(MachineStatus.DOWN);
+      
+      // Tentar registrar o evento na API, mas não bloquear se falhar
+      try {
+        await registerEvent('DOWN');
+        console.log('✅ Evento DOWN registrado com sucesso');
+      } catch (apiError) {
+        console.warn('⚠️ Erro ao registrar evento DOWN na API (continuando mesmo assim):', apiError);
+        // Não fazer nada - a funcionalidade continua mesmo sem registro na API
+      }
+      
+      // Navegar para a tela de paradas independentemente do resultado da API
+      setView(ViewState.STOP_REASON);
+      
+    } catch (error) {
+      console.error('❌ Erro inesperado no setDown:', error);
+      // Mesmo com erro, garantir que a tela de paradas abra
+      setMachineStatus(MachineStatus.DOWN);
+      setView(ViewState.STOP_REASON);
+    }
   };
 
   if (isFixed) {
@@ -61,7 +83,7 @@ const MachineControls: React.FC<MachineControlsProps> = ({ isFixed = false }) =>
           />
           <ControlButton 
             label="Setup" 
-            icon={<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2v-1a2 2 0 0 1 2-2h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.09a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2h1a2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51h.09a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.09a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2v1a2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>}
+            icon={<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0-.33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2v-1a2 2 0 0 1 2-2h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.09a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2h1a2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51h.09a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.09a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2v1a2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>}
             onClick={startSetup}
             colorClass="bg-blue-500 hover:bg-blue-600"
             isActive={machineStatus === MachineStatus.SETUP}

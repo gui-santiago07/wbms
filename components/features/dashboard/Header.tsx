@@ -7,11 +7,12 @@ import { useLineSelection } from '../../../hooks/useLineSelection';
 import ShiftModal from '../modals/ShiftModal';
 import LineSelectionModal from '../modals/LineSelectionModal';
 import StatusDisplay from './StatusDisplay';
+import { ViewState } from '../../../types';
 
 const Header: React.FC = () => {
   const currentTime = useClock();
   const { user, logout } = useAuth();
-  const { currentShift } = useProductionStore();
+  const { currentShift, setView } = useProductionStore();
   const { isModalOpen, closeModal, confirmLineSelection, shouldShowModal } = useLineSelection();
   const [showShiftModal, setShowShiftModal] = useState(false);
 
@@ -30,6 +31,12 @@ const Header: React.FC = () => {
   // Usar turno atual do store (detecção silenciosa)
   const displayShift = currentShift;
 
+  // Função de teste para a tela de paradas
+  const testStopReasonScreen = () => {
+    console.log('🧪 Testando tela de paradas...');
+    setView(ViewState.STOP_REASON);
+  };
+
   return (
     <header className="flex justify-between items-center py-2">
       <div className="flex items-center gap-3">
@@ -43,6 +50,15 @@ const Header: React.FC = () => {
         <div>
           <p className="text-xs text-muted">Production Monitoring Dashboard</p>
         </div>
+        
+        {/* Botão de teste temporário */}
+        <button
+          onClick={testStopReasonScreen}
+          className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-xs font-medium transition-colors"
+          title="Testar tela de paradas"
+        >
+          🧪 Testar Paradas
+        </button>
       </div>
       
       {/* Status Display */}
@@ -123,6 +139,7 @@ const Header: React.FC = () => {
         onClose={closeModal}
         onConfirm={confirmLineSelection}
       />
+      
     </header>
   );
 };

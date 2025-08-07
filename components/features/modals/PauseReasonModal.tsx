@@ -52,11 +52,11 @@ const CircularGauge: React.FC<{
 
 const PauseReasonModal: React.FC = () => {
   console.log('🔄 PauseReasonModal: Componente montado');
-  const { liveMetrics, currentJob, downtimeReasons, downtimeHistory, topStopReasons, registerStopReason, registerStopReasonWithAutoApontamento, addToTopStopReasons, currentShift, fetchStopReasons, fetchPauseReasons, fetchDowntimeHistory, isLoading, error, setView } = useProductionStore();
+  const { liveMetrics, currentJob, pauseReasons, downtimeHistory, topStopReasons, registerStopReason, registerStopReasonWithAutoApontamento, addToTopStopReasons, currentShift, fetchStopReasons, fetchPauseReasons, fetchDowntimeHistory, isLoading, error, setView } = useProductionStore();
   
   const [selectedReason, setSelectedReason] = useState<string>('');
   const [showReasonModal, setShowReasonModal] = useState(false);
-  const [activeCategory, setActiveCategory] = useState<string>(downtimeReasons[0]?.category || '');
+  const [activeCategory, setActiveCategory] = useState<string>(pauseReasons[0]?.category || '');
   const [searchTerm, setSearchTerm] = useState('');
   const [customReason, setCustomReason] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -66,11 +66,11 @@ const PauseReasonModal: React.FC = () => {
   const { user } = useAuth();
 
   useEffect(() => {
-    if (downtimeReasons.length === 0) {
+    if (pauseReasons.length === 0) {
       fetchPauseReasons();
     }
     fetchDowntimeHistory();
-  }, [downtimeReasons.length, fetchPauseReasons, fetchDowntimeHistory]);
+  }, [pauseReasons.length, fetchPauseReasons, fetchDowntimeHistory]);
 
   useEffect(() => {
     setLocalDowntimeHistory(downtimeHistory);
@@ -184,7 +184,7 @@ const PauseReasonModal: React.FC = () => {
     }
   };
 
-  const filteredReasons = downtimeReasons.flatMap(cat => 
+  const filteredReasons = pauseReasons.flatMap(cat => 
     cat.reasons.filter(reason => 
       reason.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
       reason.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -477,8 +477,8 @@ const PauseReasonModal: React.FC = () => {
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    {downtimeReasons.length > 0 ? (
-                      downtimeReasons.map(cat => {
+                    {pauseReasons.length > 0 ? (
+                      pauseReasons.map(cat => {
                         const categoryReasons = cat.reasons.filter(reason => 
                           reason.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           reason.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
