@@ -1408,10 +1408,12 @@ export const useProductionStore = create<ProductionState>()(
 
   // Métodos para produto selecionado
   setSelectedProduct: (product: ProductSelection | null) => {
+    console.log('🔄 Store: setSelectedProduct chamado com:', product);
     set({ selectedProduct: product });
   },
 
   setSetupData: (setupData: any) => {
+    console.log('🔄 Store: setSetupData chamado com:', setupData);
     set({ setupData });
   },
 

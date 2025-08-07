@@ -37,9 +37,12 @@ export const useProductionStatusCheck = (): ProductionStatusCheckResult => {
           try {
             const product = JSON.parse(cachedProduct);
             setSelectedProduct(product);
+            console.log('✅ Produto carregado do cache:', product);
           } catch (error) {
             console.warn('⚠️ Erro ao carregar produto do cache:', error);
           }
+        } else {
+          console.log('ℹ️ Nenhum produto encontrado no cache');
         }
 
         // 2. Carregar setupData do cache
@@ -48,9 +51,12 @@ export const useProductionStatusCheck = (): ProductionStatusCheckResult => {
           try {
             const setupData = JSON.parse(cachedSetupData);
             setSetupData(setupData);
+            console.log('✅ SetupData carregado do cache:', setupData);
           } catch (error) {
             console.warn('⚠️ Erro ao carregar setupData do cache:', error);
           }
+        } else {
+          console.log('ℹ️ Nenhum setupData encontrado no cache');
         }
 
         // 3. Buscar todas as linhas disponíveis
