@@ -51,14 +51,6 @@ const Header: React.FC = () => {
           <p className="text-xs text-muted">Production Monitoring Dashboard</p>
         </div>
         
-        {/* Botão de teste temporário */}
-        <button
-          onClick={testStopReasonScreen}
-          className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-xs font-medium transition-colors"
-          title="Testar tela de paradas"
-        >
-          🧪 Testar Paradas
-        </button>
       </div>
       
       {/* Status Display */}
