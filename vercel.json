@@ -2,11 +2,11 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "http://localhost:8090/api/$1"
+      "destination": "https://staging.option7.ai/api/$1"
     },
     {
       "source": "/automatic-production/(.*)",
-      "destination": "http://localhost:8090/automatic-production/$1"
+      "destination": "https://staging.option7.ai/automatic-production/$1"
     }
   ],
   "headers": [
