@@ -13,12 +13,12 @@ const environments: Record<string, EnvironmentConfig> = {
     defaultShiftId: 'turno_1'
   },
   staging: {
-    apiBaseUrl: 'http://localhost:8090/api',
+    apiBaseUrl: 'https://staging.option7.ai/api',
     pollingInterval: 5000,
     defaultShiftId: 'turno_1' 
   },
   production: {
-    apiBaseUrl: 'http://localhost:8090/api',
+    apiBaseUrl: 'https://staging.option7.ai/api',
     pollingInterval: 10000,
     defaultShiftId: 'turno_1'
   },
