@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <!-- Fundo azul -->
+  <rect width="32" height="32" rx="6" fill="#3b82f6"/>
+  
+  <!-- Versão simplificada do logo Option7 -->
+  <g transform="translate(4, 8) scale(0.27)">
+    <!-- Texto "OPTION" simplificado -->
+    <circle cx="8" cy="8" r="6" fill="#ffffff"/>
+    <rect x="18" y="2" width="4" height="12" fill="#ffffff"/>
+    <rect x="26" y="2" width="8" height="4" fill="#ffffff"/>
+    <rect x="26" y="10" width="8" height="4" fill="#ffffff"/>
+    <rect x="38" y="2" width="4" height="12" fill="#ffffff"/>
+    <circle cx="50" cy="8" r="6" fill="#ffffff"/>
+    <rect x="62" y="2" width="4" height="12" fill="#ffffff"/>
+    
+    <!-- Número "7" estilizado -->
+    <polygon points="75,2 90,2 80,16 75,16" fill="#f8b539"/>
+  </g>
+</svg> 

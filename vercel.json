@@ -1,0 +1,72 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "https://staging.option7.ai/api/$1"
+    },
+    {
+      "source": "/automatic-production/(.*)",
+      "destination": "https://staging.option7.ai/automatic-production/$1"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "https://m.option7.ai"
+        },
+        {
+          "key": "Access-Control-Allow-Methods",
+          "value": "GET, POST, PUT, DELETE, OPTIONS"
+        },
+        {
+          "key": "Access-Control-Allow-Headers",
+          "value": "Content-Type, Authorization, X-Requested-With, Origin, Referer"
+        },
+        {
+          "key": "Access-Control-Allow-Credentials",
+          "value": "true"
+        },
+        {
+          "key": "Origin",
+          "value": "https://m.option7.ai"
+        },
+        {
+          "key": "Referer",
+          "value": "https://m.option7.ai/"
+        }
+      ]
+    },
+    {
+      "source": "/automatic-production/(.*)",
+      "headers": [
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "https://m.option7.ai"
+        },
+        {
+          "key": "Access-Control-Allow-Methods",
+          "value": "GET, POST, PUT, DELETE, OPTIONS"
+        },
+        {
+          "key": "Access-Control-Allow-Headers",
+          "value": "Content-Type, Authorization, X-Requested-With, Origin, Referer"
+        },
+        {
+          "key": "Access-Control-Allow-Credentials",
+          "value": "true"
+        },
+        {
+          "key": "Origin",
+          "value": "https://m.option7.ai"
+        },
+        {
+          "key": "Referer",
+          "value": "https://m.option7.ai/"
+        }
+      ]
+    }
+  ]
+} 

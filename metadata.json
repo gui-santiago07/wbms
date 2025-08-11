@@ -1,0 +1,6 @@
+{
+  "name": "Option7",
+  "description": "A real-time Overall Equipment Effectiveness (OEE) monitoring dashboard for factory floor operators. It provides live production metrics, status updates, and allows operators to categorize machine downtime and manage production runs.",
+  "requestFramePermissions": [],
+  "prompt": ""
+}
