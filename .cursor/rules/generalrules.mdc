@@ -1,0 +1,73 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+Com certeza. Com base em todo o nosso histórico, destilei a essência do nosso projeto em um conjunto de regras definitivas.
+
+Este é o "dossiê" do projeto, o arquivo de regras que a IA deve internalizar para construir a aplicação WBMS com precisão, consistência e aderência total às nossas decisões de negócio e design.
+
+REGRAS DO PROJETO: Central de Comandos WBMS (Para IA)
+AI, estas são as regras e o contexto específico para o projeto "Central de Comandos WBMS". Elas complementam as suas diretrizes gerais e são a fonte única da verdade para este desenvolvimento. Você deve seguir estas regras rigorosamente.
+
+Seção 1: Arquitetura e Stack do Frontend
+1.1. Stack Obrigatória: React com Vite (TypeScript), Zustand para estado global, Tailwind CSS para estilização, react-router-dom para navegação e Axios para chamadas HTTP.
+
+1.2. Natureza da Aplicação: Esta é uma aplicação cliente (frontend-only). Você consumirá uma API de um backend Laravel/PHP já existente. NÃO gere lógica de backend. Sua responsabilidade é a camada de apresentação e interação.
+
+1.3. Gerenciamento de Estado (Regra Inflexível):
+
+A store Zustand (useProductionStore) é o cérebro da aplicação. Ela detém todo o estado de dados, como machineStatus, liveMetrics, currentJob, e o estado da UI (uiState).
+
+Componentes devem ser "burros" e reativos. Eles leem dados diretamente da store.
+
+Ações do usuário (cliques em botões) devem chamar actions definidas na store, que por sua vez orquestram as mudanças de estado e as chamadas de API.
+
+Seção 2: O Fluxo de Dados WBMS
+2.1. Polling como Fonte da Verdade: O frontend é responsável por iniciar e manter um loop de polling.
+
+Ação: A cada 3 segundos, uma função na store (fetchLiveData) deve fazer uma chamada POST ao endpoint /api/wbms/live-data.
+
+Resposta: Este endpoint retorna o estado mais recente da máquina (ProductionState), que deve ser usado para atualizar a store Zustand. A UI reagirá a essa atualização.
+
+2.2. Camada de Serviço Abstrata: Todas as chamadas de API devem ser encapsuladas em funções no diretório /src/services. Inicialmente, estas funções retornarão dados mockados, mas sua assinatura (parâmetros e tipo de retorno) já deve corresponder ao que a API real espera.
+
+Seção 3: Lógica de Negócio e Regras de Interação (Crítico)
+3.1. O Fluxo de Parada Automatizado (Regra Central):
+
+O polling do /live-data retorna um objeto com machineStatus: 'DOWN'.
+
+A action fetchLiveData na store, ao processar esta resposta, DEVE executar duas mudanças de estado:
+a. Atualizar machineStatus para 'DOWN'.
+b. Atualizar uiState.isStopReasonModalVisible para true.
+
+Esta mudança de estado fará com que o StatusDisplay mude para vermelho e o StopReasonModal apareça automaticamente, forçando a interação do operador.
+
+3.2. O Significado do "OEE Simplificado":
+
+O valor de oee retornado pelo /live-data para a integração WBMS é, inicialmente, um reflexo da Disponibilidade.
+
+Regra: O frontend deve exibir este valor como "OEE" sem realizar cálculos adicionais. A lógica de cálculo real (que considera Performance e Qualidade) reside no backend e é enriquecida pelas interações do operador.
+
+3.3. Enriquecimento de Dados pelo Operador:
+
+Performance: O cálculo preciso da Performance no backend depende da seleção de um produto com um tempo de ciclo padrão. Portanto, o fluxo de "Seleção de Produto" no início de um job é uma interação crítica.
+
+Qualidade: O cálculo preciso da Qualidade depende da inserção de contagens de refugo. A interface deve prever um local ou um fluxo para que o operador possa inserir esses dados.
+
+Seção 4: Fidelidade Visual e Design System
+4.1. Requisito "Pixel-Perfect": A UI final deve ser uma réplica exata das imagens de referência. Não há espaço para liberdade criativa no layout, cores, fontes ou espaçamentos.
+
+4.2. O tailwind.config.js é Lei:
+
+Cores: Todas as cores DEVEM ser aplicadas usando as classes semânticas definidas no tailwind.config.js (ex: bg-status-running, text-surface).
+
+Fontes e Espaçamentos: Siga a mesma regra para tipografia e espaçamentos. Use as classes e valores definidos no tema.
+
+4.3. Layout Robusto e Responsivo:
+
+O layout macro das páginas DEVE ser construído com CSS Grid.
+
+O alinhamento interno dos componentes (cards, botões) DEVE usar CSS Flexbox.
+
+A abordagem de design é Tablet-First, com adaptações fluidas para desktop e um layout empilhado para dispositivos móveis.
