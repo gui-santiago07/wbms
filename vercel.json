@@ -7,6 +7,10 @@
     {
       "source": "/automatic-production/(.*)",
       "destination": "https://staging.option7.ai/automatic-production/$1"
+    },
+    {
+      "source": "/((?!api|automatic-production|assets|.*\\..*).*)",
+      "destination": "/index.html"
     }
   ],
   "headers": [
